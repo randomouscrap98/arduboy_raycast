@@ -1,7 +1,8 @@
 #pragma once
 
-#include "utils.h"
 #include <FixedPoints.h>
+
+#include "ArduboyRaycast_Utils.h"
 
 constexpr uint8_t BAYERGRADIENTS = 16;
 

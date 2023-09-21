@@ -3,7 +3,7 @@
 #include <Arduboy2.h>
 #include <FixedPoints.h>
 
-#include "utils.h"
+#include "ArduboyRaycast_Utils.h"
 
 // A single raycast map
 struct RcMap {

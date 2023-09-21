@@ -3,7 +3,7 @@
 #include <Arduboy2.h>
 #include <FixedPoints.h>
 
-#include "utils.h"
+#include "ArduboyRaycast_Utils.h"
 
 // As with raycast.h, I unfortunately require you to make changes to this file if you
 // want different results.

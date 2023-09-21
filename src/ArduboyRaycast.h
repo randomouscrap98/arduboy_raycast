@@ -3,9 +3,9 @@
 #include <FixedPoints.h>
 #include <Arduboy2.h>
 
-#include "shading.h"
-#include "rcmap.h"
-#include "rcsprite.h"
+#include "ArduboyRaycast_Shading.h"
+#include "ArduboyRaycast_Map.h"
+#include "ArduboyRaycast_Sprite.h"
 
 
 // For the time being, I expect you to modify these constants to suit your needs. Later I may
