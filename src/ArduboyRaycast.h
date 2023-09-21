@@ -61,7 +61,7 @@ struct RaycastState
 
     uflot _viewdistance = 4.0;      // Calculated value
     uflot _darkness = 1.0;          // Calculated value
-    uflot _distCache[VIEWWIDTH / 2]; // Half distance resolution means sprites will clip 1 pixel into walls sometimes but otherwise...
+    uflot _distCache[50]; // Half distance resolution means sprites will clip 1 pixel into walls sometimes but otherwise...
 };
 
 // Set the light intensity for raycasting. Performs several expensive calculations, only set this

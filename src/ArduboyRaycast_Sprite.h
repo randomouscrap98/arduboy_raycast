@@ -26,8 +26,6 @@ struct RcSprite {
     uint8_t intstate[RSINTERNALSTATEBYTES];
 };
 
-typedef void (* behavior_func)(RcSprite *,Arduboy2Base *);
-
 // Sorted sprite. Useful to keep original sprite list index as sprite ids 
 struct SSprite {
     RcSprite * sprite; 
@@ -43,8 +41,6 @@ struct RcBounds {
     uint8_t state; //some of the same as RSprite, where & 1 = active
 };
 
-#define ISSPRITEACTIVE(s) (s.state & RSSTATEACTIVE)
-
 struct RcSpriteGroup
 {
     RcSprite * sprites;
@@ -53,6 +49,10 @@ struct RcSpriteGroup
     RcBounds * bounds;
     const uint8_t numbounds;
 };
+
+typedef void (* behavior_func)(RcSprite *,Arduboy2Base *);
+
+#define ISSPRITEACTIVE(s) (s.state & RSSTATEACTIVE)
 
 void resetSprites(RcSpriteGroup * group);
 void resetBounds(RcSpriteGroup * group);

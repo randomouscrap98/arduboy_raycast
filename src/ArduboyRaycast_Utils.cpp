@@ -1,13 +1,5 @@
 #include "ArduboyRaycast_Utils.h"
 
-inline uint16_t readTextureStrip16(const uint8_t * tex, uint8_t tile, uint8_t strip)
-{
-    //32 is a constant: 16x16 textures take up 32 bytes
-    const uint8_t * tofs = tex + tile * 32 + strip;
-    //textureOffset16(tex, tile, strip);
-    return pgm_read_byte(tofs) + 256 * pgm_read_byte(tofs + 16);
-}
-
 void fastClear(Arduboy2Base * arduboy, uint8_t x, uint8_t y, uint8_t x2, uint8_t y2)
 {
     uint8_t yEnd = (y2 >> 3) + (y2 & 7 ? 1 : 0);

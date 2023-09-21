@@ -1,20 +1,9 @@
-#include <Arduboy2.h>
 #include "ArduboyRaycast_Map.h"
 
 void initPlayerDirection(RcPlayer * player, float angle, float fov)
 {
     player->dirX = fov * cos(angle);
     player->dirY = fov * sin(angle);
-}
-
-inline uint8_t mapIndex(RcMap * map, uint8_t x, uint8_t y)
-{
-    return y * map->width + x;
-}
-
-inline uint8_t getMapCell(RcMap * map, uint8_t x, uint8_t y)
-{
-    return map->map[mapIndex(map, x, y)];
 }
 
 void setMapCell(RcMap * map, uint8_t x, uint8_t y, uint8_t tile)

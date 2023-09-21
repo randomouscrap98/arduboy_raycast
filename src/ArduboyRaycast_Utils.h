@@ -25,7 +25,14 @@ constexpr uflot NEARZEROFIXED = 1.0f / 128; // Prefer accuracy (fixed decimal ex
 #define oddify(v) if((v & 1) == 0) v -= 1
 
 // Only works for 16x16 textures
-inline uint16_t readTextureStrip16(const uint8_t * tex, uint8_t tile, uint8_t strip);
+inline uint16_t readTextureStrip16(const uint8_t * tex, uint8_t tile, uint8_t strip)
+{
+    //32 is a constant: 16x16 textures take up 32 bytes
+    const uint8_t * tofs = tex + tile * 32 + strip;
+    //textureOffset16(tex, tile, strip);
+    return pgm_read_byte(tofs) + 256 * pgm_read_byte(tofs + 16);
+}
+
 
 // A rectangle starting at x, y and having side w, h
 struct MRect {
