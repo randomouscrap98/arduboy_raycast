@@ -25,13 +25,7 @@ constexpr uflot NEARZEROFIXED = 1.0f / 128; // Prefer accuracy (fixed decimal ex
 #define oddify(v) if((v & 1) == 0) v -= 1
 
 // Only works for 16x16 textures
-inline uint16_t readTextureStrip16(const uint8_t * tex, uint8_t tile, uint8_t strip)
-{
-    //32 is a constant: 16x16 textures take up 32 bytes
-    const uint8_t * tofs = tex + tile * 32 + strip;
-    //textureOffset16(tex, tile, strip);
-    return pgm_read_byte(tofs) + 256 * pgm_read_byte(tofs + 16);
-}
+inline uint16_t readTextureStrip16(const uint8_t * tex, uint8_t tile, uint8_t strip);
 
 // A rectangle starting at x, y and having side w, h
 struct MRect {
@@ -44,13 +38,7 @@ struct MRect {
 // Clear screen in a fast block. Note that y will be shifted down and y2
 // shifted up to the nearest multiple of 8 to be byte aligned, so you 
 // may not get the exact box you want. X2 and Y2 are exclusive
-void fastClear(Arduboy2Base * arduboy, uint8_t x, uint8_t y, uint8_t x2, uint8_t y2)
-{
-    uint8_t yEnd = (y2 >> 3) + (y2 & 7 ? 1 : 0);
-    //Arduboy2 fillrect is absurdly slow; I have the luxury of doing this instead
-    for(uint8_t i = y >> 3; i < yEnd; ++i)
-        memset(arduboy->sBuffer + (i * 128) + x, 0, x2 - x);
-}
+void fastClear(Arduboy2Base * arduboy, uint8_t x, uint8_t y, uint8_t x2, uint8_t y2);
 
 //For SOME REASON, it's less generated code to call these four things than to call any 
 //rectangle function, or to even make this a proper function. Oh well
@@ -59,14 +47,6 @@ void fastClear(Arduboy2Base * arduboy, uint8_t x, uint8_t y, uint8_t x2, uint8_t
     a.drawFastVLine(x2, y,  (y2) - (y), c); \
     a.drawFastHLine(x,  y,  (x2) - (x), c); \
     a.drawFastHLine(x,  y2, (x2) - (x), c);
-
-//void fastRect(Arduboy2Base * arduboy, uint8_t x, uint8_t y, uint8_t x2, uint8_t y2, uint8_t color)
-//{
-//    arduboy->drawFastVLine(x, y, y2 - y, color); //VIEWWIDTH + 1, 0, HEIGHT, WHITE);
-//    arduboy->drawFastVLine(x2, y, y2- y, color);
-//    arduboy->drawFastHLine(x, y, x2 - x, color);
-//    arduboy->drawFastHLine(x, y2, x2 - x, color);
-//}
 
 // Left shift lookup table for 1 << N
 constexpr uint16_t shift1Lookup16[17] = { 
@@ -82,8 +62,6 @@ constexpr uint8_t shift1Lookup8[9] = {
 
 #define fastlshift8(x) shift1Lookup8[x]
 #define fastlshift16(x) shift1Lookup16[x]
-//#define fastlshift8(x) pgm_read_byte(shift1Lookup8 + (x))
-//#define fastlshift16(x) pgm_read_word(shift1Lookup16 + (x))
 
 // Taken from https://github.com/tiberiusbrown/arduboy_minigolf/blob/master/div.cpp
 constexpr uint16_t DIVISORS[256] PROGMEM =
@@ -123,33 +101,9 @@ constexpr uint16_t DIVISORS[256] PROGMEM =
 };
 
 // Get 1/x where x is unit range only
-flot fReciprocalUnit(flot x)
-{
-    if(x.getInteger())
-        return 1; //This is dumb
-    return flot::fromInternal(pgm_read_word(DIVISORS + (x.getInternal() & 0xFF))) * (x < 0 ? -1 : 1);
-}
+flot fReciprocalUnit(flot x);
 // Get 1/x where x is unit range only (uflot)
-uflot uReciprocalUnit(uflot x)
-{
-    if(x.getInteger())
-        return 1; //This is dumb
-    return uflot::fromInternal(pgm_read_word(DIVISORS + (x.getInternal() & 0xFF)));
-}
-
+uflot uReciprocalUnit(uflot x);
 // Reciprocal of ALMOST unit length (ie 2 to -2) Reduces precision when in the outer range
-uflot uReciprocalNearUnit(uflot x)
-{
-    if(x.getInteger())
-        return uflot::fromInternal(pgm_read_word(DIVISORS + ((x * 0.5).getInternal() & 0xFF))) * 0.5;
-    else
-        return uflot::fromInternal(pgm_read_word(DIVISORS + (x.getInternal() & 0xFF)));
-}
-
-flot fReciprocalNearUnitNoSign(flot x)
-{
-    if(x.getInteger())
-        return flot::fromInternal(pgm_read_word(DIVISORS + ((x * 0.5).getInternal() & 0xFF))) * 0.5;
-    else
-        return flot::fromInternal(pgm_read_word(DIVISORS + (x.getInternal() & 0xFF)));
-}
+uflot uReciprocalNearUnit(uflot x);
+flot fReciprocalNearUnitNoSign(flot x);
