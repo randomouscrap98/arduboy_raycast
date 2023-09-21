@@ -5,6 +5,8 @@
 
 #include "ArduboyRaycast_Utils.h"
 
+constexpr uint8_t RCMAXMAPDIMENSION = 16;
+
 // A single raycast map
 struct RcMap {
     uint8_t * map;
@@ -19,6 +21,12 @@ struct RcPlayer {
     float dirX; //These HAVE TO be float, or something with a lot more precision
     float dirY; 
 };
+
+// Set the player direction, though you should probably use 1.0 as fov
+void initPlayerDirection(RcPlayer * player, float angle, float fov) {
+    player->dirX = fov * cos(angle);
+    player->dirY = fov * sin(angle);
+}
 
 inline uint8_t mapIndex(RcMap * map, uint8_t x, uint8_t y) {
     return y * map->width + x;

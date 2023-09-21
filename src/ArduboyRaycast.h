@@ -8,38 +8,38 @@
 #include "ArduboyRaycast_Sprite.h"
 
 
-// For the time being, I expect you to modify these constants to suit your needs. Later I may
-// have some way to configure it outside the file.
+// These are the things you can set pre-emptively, they absolutely MUST be constants
+#ifndef RCVIEWWIDTH
+#define RCVIEWWIDTH WIDTH
+#endif
+#ifndef RCVIEWHEIGHT
+#define RCVIEWHEIGHT HEIGHT
+#endif
 
-// Graphics constants
-constexpr uint8_t VIEWWIDTH = 100;
-constexpr uint8_t VIEWHEIGHT = HEIGHT;
-constexpr uflot FAKEFOV = 1.0;      // Not that useful, may break. 1 = 90, higher = more than 90
-constexpr uflot LIGHTINTENSITY = 1.5;
-
+// Unless you ask for custom flags, raycaster just sets some sane defaults
+#ifndef RCCUSTOMFLAGS
 // Visualization flags (barely impacts performance) 
 #define CORNERSHADOWS       // Shadows at the bottom of walls help differentiate walls from floor
-#define DRAWFOUNDATION      // You probably want the floor + whatever else that aren't walls
 #define WALLSHADING 1       // Unset = no wall shading, 1 = shading, 2 = half resolution shading. "LIGHTINTENSITY" still affects draw distance regardless
 #define ALTWALLSHADING      // Make perpendicular walls half-shaded to increase readability
 //#define WHITEFOG            // Make distance shading white instead of black
-
 // Optimization flags (greatly impacts performance... I think?) 
 #define CRITICALLOOPUNROLLING   // This adds a large (~1.5kb) amount of code but significantly increases performance, especially sprites
-
 // Debug flags 
 // #define LINEHEIGHTDEBUG      // Display information about lineheight (only draws a few lines)
+#endif
 
 // -------------- CALCULATED / ASSUMED CONSTANTS, TRY NOT TO TOUCH ------------------------
+// Graphics constants
+constexpr uint8_t VIEWWIDTH = RCVIEWWIDTH;
+constexpr uint8_t VIEWHEIGHT = RCVIEWHEIGHT;
 // Screen
 constexpr uint8_t MIDSCREENY = VIEWHEIGHT / 2;
 constexpr uint8_t MIDSCREENX = VIEWWIDTH / 2;
 constexpr flot INVWIDTH = 1.0 / VIEWWIDTH;
 constexpr flot INVHEIGHT = 1.0 / VIEWHEIGHT;
+constexpr flot INVWIDTH2 = 2.0f / VIEWWIDTH;
 constexpr uint8_t BWIDTH = WIDTH >> 3;
-// Lighting
-const uflot VIEWDISTANCE = sqrt(BAYERGRADIENTS * (float)LIGHTINTENSITY);
-const uflot DARKNESS = 1 / LIGHTINTENSITY;
 // Distance stuff; if you need to change this for some reason, idk just reconsider I guess
 constexpr uint8_t LDISTSAFE = 16;
 constexpr uflot MINLDISTANCE = 1.0f / LDISTSAFE;
@@ -51,9 +51,25 @@ constexpr uint8_t RCTILESIZE = 16;
 // ------------------------------------------------------------------------------
 
 
-// Globals that are required for this to run (sorry)
-uflot distCache[VIEWWIDTH / 2]; // Half distance resolution means sprites will clip 1 pixel into walls sometimes but otherwise...
+// A container to hold raycasting state. 
+struct RaycastState {
+    uflot lightintensity = 1.0;     // Impacts view distance + shading even when no shading applied
+    const uint8_t * tilesheet = NULL;
+    const uint8_t * spritesheet = NULL;
+    const uint8_t * spritesheet_mask = NULL;
 
+    uflot _viewdistance = 4.0;      // Calculated value
+    uflot _darkness = 1.0;          // Calculated value
+    uflot _distCache[VIEWWIDTH / 2]; // Half distance resolution means sprites will clip 1 pixel into walls sometimes but otherwise...
+};
+
+
+void setLightIntensity(RaycastState * state, uflot intensity) 
+{
+    state->lightintensity = intensity;
+    state->_viewdistance = sqrt(BAYERGRADIENTS * (float)intensity);
+    state->_darkness = 1 / intensity;
+}
 
 // Full clear specifically the raycast area. Note that if your view height is not aligned to a byte boundary,
 // this will overclear the raycast area.
@@ -184,7 +200,7 @@ void drawWallLine(uint8_t x, uint16_t lineHeight, uint8_t shade, uint16_t texDat
 }
 
 // The full function for raycasting. 
-void raycastWalls(RcPlayer * p, RcMap * map, Arduboy2Base * arduboy, const uint8_t * tilesheet)
+void raycastWalls(RcPlayer * p, RcMap * map, Arduboy2Base * arduboy, RaycastState * state)
 {
     //Waste ~20 bytes of stack to save numerous cycles on render (and on programmer. leaving posX + posY floats so...)
     uint8_t pmapX = p->posX.getInteger();
@@ -193,8 +209,12 @@ void raycastWalls(RcPlayer * p, RcMap * map, Arduboy2Base * arduboy, const uint8
     uflot pmapofsY = p->posY - pmapY;
     flot fposX = (flot)p->posX, fposY = (flot)p->posY;
     flot dX = p->dirX, dY = p->dirY;
-    flot planeX = dY * (flot)FAKEFOV, planeY = - dX * (flot)FAKEFOV; // Camera vector or something, simple -90 degree rotate from dir
-    constexpr flot INVWIDTH = 2.0f / VIEWWIDTH;
+    const uint8_t * tilesheet = state->tilesheet;
+    uflot darkness = state->_darkness;
+    uflot viewdistance = state->_viewdistance;
+    uflot * distCache = state->_distCache;
+
+    //flot planeX = dY * (flot)state->fakefov, planeY = - dX * (flot)state->fakefov; // Camera vector or something, simple -90 degree rotate from dir
 
     uint8_t shade = 0;
     uint8_t texX = 0;
@@ -205,11 +225,11 @@ void raycastWalls(RcPlayer * p, RcMap * map, Arduboy2Base * arduboy, const uint8
 
     for (uint8_t x = 0; x < VIEWWIDTH; x++)
     {
-        flot cameraX = x * INVWIDTH - 1; // x-coordinate in camera space
+        flot cameraX = x * INVWIDTH2 - 1; // x-coordinate in camera space
 
         // The camera plane is a simple -90 degree rotation on the player direction (as required for this algorithm).
-        flot rayDirX = dX + planeX * cameraX;
-        flot rayDirY = dY + planeY * cameraX;
+        flot rayDirX = dX + dY * cameraX;
+        flot rayDirY = dY - dX * cameraX;
 
         // length of ray from one x or y-side to next x or y-side. But we prefill it with
         // some initial data which has to be massaged later.
@@ -277,7 +297,7 @@ void raycastWalls(RcPlayer * p, RcMap * map, Arduboy2Base * arduboy, const uint8
             // Check if ray has hit a wall
             tile = getMapCell(map, mapX, mapY);
         }
-        while (perpWallDist < VIEWDISTANCE && tile == RCEMPTY);
+        while (perpWallDist < viewdistance && tile == RCEMPTY);
 
         //Only calc distance for every other point to save a lot of memory (100 bytes)
         if((x & 1) == 0)
@@ -286,13 +306,13 @@ void raycastWalls(RcPlayer * p, RcMap * map, Arduboy2Base * arduboy, const uint8
 
             #if WALLSHADING == 2
             //Since we're in here anyway, do the half-res shading too (if requested)
-            shade = calcShading(perpWallDist, x, DARKNESS);
+            shade = calcShading(perpWallDist, x, darkness);
             #endif
         }
 
         #if WALLSHADING == 1
         //Full res shading happens every frame of course
-        shade = calcShading(perpWallDist, x, DARKNESS);
+        shade = calcShading(perpWallDist, x, darkness);
         #endif
         #ifndef WALLSHADING
         //If you're not having any wall shading, it's always fully set
@@ -339,14 +359,18 @@ void raycastWalls(RcPlayer * p, RcMap * map, Arduboy2Base * arduboy, const uint8
 }
 
 
-void drawSprites(RcPlayer * player, RcSpriteGroup * group, Arduboy2Base * arduboy, const uint8_t * spritesheet, const uint8_t * spritesheet_Mask)
+void drawSprites(RcPlayer * player, RcSpriteGroup * group, Arduboy2Base * arduboy, RaycastState * state)
 {
     uint8_t usedSprites = sortSprites(player->posX, player->posY, group);
+
+    const uint8_t * spritesheet = state->spritesheet;
+    const uint8_t * spritesheet_Mask = state->spritesheet_mask;
 
     float fposX = (float)player->posX, fposY = (float)player->posY;
     float planeX = player->dirY, planeY = -player->dirX;
     float invDet = 1.0 / (planeX * player->dirY - planeY * player->dirX); // required for correct matrix multiplication
     uint8_t * sbuffer = arduboy->sBuffer;
+    uflot * distCache = state->_distCache;
 
     // after sorting the sprites, do the projection and draw them. We know all sprites in the array are active,
     // since we're looping against the sorted array.

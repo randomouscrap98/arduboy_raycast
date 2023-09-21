@@ -1,7 +1,7 @@
 #include <Arduboy2.h>
 #include <FixedPoints.h>
 
-#include "raycast.h"
+#include <ArduboyRaycast.h>
 
 Arduboy2 arduboy;
 
