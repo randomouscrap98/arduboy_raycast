@@ -1,49 +1,50 @@
 #include "ArduboyRaycast_Sprite.h"
 
-void resetSprites(RcSpriteGroup * group)
+void RcSpriteGroup::resetSprites()
 {
-    memset(group->sprites, 0, sizeof(RcSprite) * group->numsprites);
+    memset(this->sprites, 0, sizeof(RcSprite) * this->numsprites);
 }
 
-void resetBounds(RcSpriteGroup * group)
+void RcSpriteGroup::resetBounds()
 {
-    memset(group->bounds, 0, sizeof(RcBounds) * group->numbounds);
+    memset(this->bounds, 0, sizeof(RcBounds) * this->numbounds);
 }
 
-void resetGroup(RcSpriteGroup * group)
+void RcSpriteGroup::resetGroup()
 {
-    resetBounds(group);
-    resetSprites(group);
+    this->resetBounds();
+    this->resetSprites();
 }
 
-void runSprites(RcSpriteGroup * group, Arduboy2Base * arduboy)
+void RcSpriteGroup::runSprites(Arduboy2Base * arduboy)
 {
-    uint8_t numsprites = group->numsprites;
+    uint8_t numsprites = this->numsprites;
     for(uint8_t i = 0; i < numsprites; i++)
     {
-        if(!ISSPRITEACTIVE(group->sprites[i]))
+        RcSprite * sprite = &this->sprites[i];
+        if(!ISSPRITEACTIVE((*sprite)))
             continue;
         
-        if(group->sprites[i].behavior)
-            group->sprites[i].behavior(&group->sprites[i], arduboy);
+        if(sprite->behavior)
+            sprite->behavior(sprite, arduboy);
     }
 }
 
 //Sort sprites within the sprite contiainer (only affects the sorted list). returns number of active sprites
-uint8_t sortSprites(uflot playerX, uflot playerY, RcSpriteGroup * group)
+uint8_t RcSpriteGroup::sortSprites(uflot playerX, uflot playerY)
 {
     SFixed<11,4> fposx = (SFixed<11,4>)playerX;
     SFixed<11,4> fposy = (SFixed<11,4>)playerY;
 
     //Make a temp sort array on stack
-    uint8_t numsprites = group->numsprites;
+    uint8_t numsprites = this->numsprites;
     uint8_t usedSprites = 0;
-    SSprite * sorted = group->tempsorting;
+    SSprite * sorted = this->tempsorting;
     
     // Calc distance. Also, sort elements (might as well, we're already here)
     for (uint8_t i = 0; i < numsprites; ++i)
     {
-        RcSprite * sprite = &group->sprites[i];
+        RcSprite * sprite = &this->sprites[i];
 
         if (!ISSPRITEACTIVE((*sprite)))
             continue;
@@ -71,12 +72,12 @@ uint8_t sortSprites(uflot playerX, uflot playerY, RcSpriteGroup * group)
     return usedSprites;
 }
 
-RcSprite * addSprite(RcSpriteGroup * group, float x, float y, uint8_t frame, uint8_t shrinkLevel, int8_t heightAdjust, behavior_func func)
+RcSprite * RcSpriteGroup::addSprite(float x, float y, uint8_t frame, uint8_t shrinkLevel, int8_t heightAdjust, behavior_func func)
 {
-    uint8_t numsprites = group->numsprites;
+    uint8_t numsprites = this->numsprites;
     for(uint8_t i = 0; i < numsprites; i++)
     {
-        RcSprite * sprite = &group->sprites[i];
+        RcSprite * sprite = &this->sprites[i];
         if(!ISSPRITEACTIVE((*sprite)))
         {
             sprite->x = muflot(x);
