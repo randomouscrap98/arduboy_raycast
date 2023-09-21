@@ -52,21 +52,28 @@ constexpr uint8_t RCTILESIZE = 16;
 
 
 // A container to hold raycasting state. 
-struct RaycastState
+class RaycastInstance
 {
-    uflot lightintensity = 1.0;     // Impacts view distance + shading even when no shading applied
-    const uint8_t * tilesheet = NULL;
-    const uint8_t * spritesheet = NULL;
-    const uint8_t * spritesheet_mask = NULL;
+    public:
+        uflot lightintensity = 1.0;     // Impacts view distance + shading even when no shading applied
+        const uint8_t * tilesheet = NULL;
+        const uint8_t * spritesheet = NULL;
+        const uint8_t * spritesheet_mask = NULL;
 
-    uflot _viewdistance = 4.0;      // Calculated value
-    uflot _darkness = 1.0;          // Calculated value
-    uflot _distCache[50]; // Half distance resolution means sprites will clip 1 pixel into walls sometimes but otherwise...
+    // I want these to be private but they're needed elsewhere
+        uflot _viewdistance = 4.0;      // Calculated value
+        uflot _darkness = 1.0;          // Calculated value
+        uflot _distCache[VIEWWIDTH / 2]; // Half distance resolution means sprites will clip 1 pixel into walls sometimes but otherwise...
+
+        // Set the light intensity for raycasting. Performs several expensive calculations, only set this
+        // when necessary
+        void setLightIntensity(uflot intensity);
+
+        // The full function for raycasting. 
+        void raycastWalls(RcPlayer * p, RcMap * map, Arduboy2Base * arduboy);
+
+        void drawSprites(RcPlayer * player, RcSpriteGroup * group, Arduboy2Base * arduboy);
 };
-
-// Set the light intensity for raycasting. Performs several expensive calculations, only set this
-// when necessary
-void setLightIntensity(RaycastState * state, uflot intensity);
 
 // Full clear specifically the raycast area. Note that if your view height is not aligned to a byte boundary,
 // this will overclear the raycast area.
@@ -75,8 +82,3 @@ void clearRaycast(Arduboy2Base * arduboy);
 //Draw a single raycast wall line. Will only draw specifically the wall line and will clip out all the rest
 //(so you can predraw a ceiling and floor before calling raycast)
 void drawWallLine(uint8_t x, uint16_t lineHeight, uint8_t shade, uint16_t texData, Arduboy2Base * arduboy);
-
-// The full function for raycasting. 
-void raycastWalls(RcPlayer * p, RcMap * map, Arduboy2Base * arduboy, RaycastState * state);
-
-void drawSprites(RcPlayer * player, RcSpriteGroup * group, Arduboy2Base * arduboy, RaycastState * state);

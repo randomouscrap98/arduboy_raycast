@@ -28,6 +28,8 @@ struct RcSprite {
     uint8_t intstate[RSINTERNALSTATEBYTES];
 };
 
+typedef void (* behavior_func)(RcSprite *,Arduboy2Base *);
+
 // Sorted sprite. Useful to keep original sprite list index as sprite ids 
 struct SSprite {
     RcSprite * sprite; 
@@ -59,7 +61,7 @@ class RcSpriteGroup
 
         void resetSprites();
         void resetBounds();
-        void resetGroup();
+        void resetAll();
         void runSprites(Arduboy2Base * arduboy);
 
         //Sort sprites within the sprite contiainer (only affects the sorted list). returns number of active sprites
@@ -67,6 +69,5 @@ class RcSpriteGroup
         RcSprite * addSprite(float x, float y, uint8_t frame, uint8_t shrinkLevel, int8_t heightAdjust, behavior_func func);
 };
 
-typedef void (* behavior_func)(RcSprite *,Arduboy2Base *);
 
 

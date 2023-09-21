@@ -24,9 +24,9 @@ void tryMovement(RcPlayer * player, RcSpriteGroup * sprites, float movement, flo
                 if (!ISSPRITEACTIVE((*bounds)))
                     continue;
 
-                if (newPosX > bounds->x1 && newPosX < bounds->x2 && posY > bounds->y1 && posY < bounds->y2)
+                if(bounds->colliding(newPosX, posY))
                     newPosX = posX;
-                if (posX > bounds->x1 && posX < bounds->x2 && newPosY > bounds->y1 && newPosY < bounds->y2)
+                if(bounds->colliding(posX, newPosY))
                     newPosY = posY;
             }
         }

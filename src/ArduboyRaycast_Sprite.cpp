@@ -10,7 +10,7 @@ void RcSpriteGroup::resetBounds()
     memset(this->bounds, 0, sizeof(RcBounds) * this->numbounds);
 }
 
-void RcSpriteGroup::resetGroup()
+void RcSpriteGroup::resetAll()
 {
     this->resetBounds();
     this->resetSprites();

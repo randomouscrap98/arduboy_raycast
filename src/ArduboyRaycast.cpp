@@ -1,13 +1,6 @@
 #include "ArduboyRaycast.h"
 #include "ArduboyRaycast_Shading.h"
 
-void setLightIntensity(RaycastState * state, uflot intensity)
-{
-    state->lightintensity = intensity;
-    state->_viewdistance = sqrt(BAYERGRADIENTS * (float)intensity);
-    state->_darkness = 1 / intensity;
-}
-
 void clearRaycast(Arduboy2Base * arduboy)
 {
     fastClear(arduboy, 0, 0, VIEWWIDTH, VIEWHEIGHT);
@@ -132,7 +125,15 @@ void drawWallLine(uint8_t x, uint16_t lineHeight, uint8_t shade, uint16_t texDat
     // ------- END CRITICAL SECTION -------------
 }
 
-void raycastWalls(RcPlayer * p, RcMap * map, Arduboy2Base * arduboy, RaycastState * state)
+void RaycastInstance::setLightIntensity(uflot intensity)
+{
+    this->lightintensity = intensity;
+    this->_viewdistance = sqrt(BAYERGRADIENTS * (float)intensity);
+    this->_darkness = 1 / intensity;
+}
+
+
+void RaycastInstance::raycastWalls(RcPlayer * p, RcMap * map, Arduboy2Base * arduboy)
 {
     //Waste ~20 bytes of stack to save numerous cycles on render (and on programmer. leaving posX + posY floats so...)
     uint8_t pmapX = p->posX.getInteger();
@@ -141,10 +142,10 @@ void raycastWalls(RcPlayer * p, RcMap * map, Arduboy2Base * arduboy, RaycastStat
     uflot pmapofsY = p->posY - pmapY;
     flot fposX = (flot)p->posX, fposY = (flot)p->posY;
     flot dX = p->dirX, dY = p->dirY;
-    const uint8_t * tilesheet = state->tilesheet;
-    uflot darkness = state->_darkness;
-    uflot viewdistance = state->_viewdistance;
-    uflot * distCache = state->_distCache;
+    const uint8_t * tilesheet = this->tilesheet;
+    uflot darkness = this->_darkness;
+    uflot viewdistance = this->_viewdistance;
+    uflot * distCache = this->_distCache;
 
     //flot planeX = dY * (flot)state->fakefov, planeY = - dX * (flot)state->fakefov; // Camera vector or something, simple -90 degree rotate from dir
 
@@ -227,7 +228,7 @@ void raycastWalls(RcPlayer * p, RcMap * map, Arduboy2Base * arduboy, RaycastStat
                 side = 1; //1 = yside hit
             }
             // Check if ray has hit a wall
-            tile = getMapCell(map, mapX, mapY);
+            tile = map->getCell(mapX, mapY);
         }
         while (perpWallDist < viewdistance && tile == RCEMPTY);
 
@@ -290,18 +291,18 @@ void raycastWalls(RcPlayer * p, RcMap * map, Arduboy2Base * arduboy, RaycastStat
     }
 }
 
-void drawSprites(RcPlayer * player, RcSpriteGroup * group, Arduboy2Base * arduboy, RaycastState * state)
+void RaycastInstance::drawSprites(RcPlayer * player, RcSpriteGroup * group, Arduboy2Base * arduboy)
 {
-    uint8_t usedSprites = sortSprites(player->posX, player->posY, group);
+    uint8_t usedSprites = group->sortSprites(player->posX, player->posY);
 
-    const uint8_t * spritesheet = state->spritesheet;
-    const uint8_t * spritesheet_Mask = state->spritesheet_mask;
+    const uint8_t * spritesheet = this->spritesheet;
+    const uint8_t * spritesheet_Mask = this->spritesheet_mask;
 
     float fposX = (float)player->posX, fposY = (float)player->posY;
     float planeX = player->dirY, planeY = -player->dirX;
     float invDet = 1.0 / (planeX * player->dirY - planeY * player->dirX); // required for correct matrix multiplication
     uint8_t * sbuffer = arduboy->sBuffer;
-    uflot * distCache = state->_distCache;
+    uflot * distCache = this->_distCache;
 
     // after sorting the sprites, do the projection and draw them. We know all sprites in the array are active,
     // since we're looping against the sorted array.
