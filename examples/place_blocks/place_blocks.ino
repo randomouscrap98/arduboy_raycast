@@ -61,30 +61,44 @@ void movement()
 // Function for letting the player place or remove blocks.
 void playerblock()
 {
-    // Use integers just in case it's somehow outside the map (unlikely). 
+    // Use integers just in case it's somehow outside the map (we're going twice the 
+    // facing direction, so it might actually be!)
     // Because of performance, the player's position is a "fixed point", which has to be
     // cast up to a float when used with player direction. Sorry!
-    int8_t blockX = (float)raycast.player.posX + raycast.player.dirX;
-    int8_t blocky = (float)raycast.player.posY + raycast.player.dirY;
+    int8_t blockX = (float)raycast.player.posX + 2 * raycast.player.dirX;
+    int8_t blockY = (float)raycast.player.posY + 2 * raycast.player.dirY;
 
     // Do some initial checks: if we're outside the array or if the block we're
     // working on is indestructible, don't do anything!
-
+    bool error_state = 
+        blockX < 0 || blockY < 0 || blockX >= raycast.worldMap.width || blockY >= raycast.worldMap.height || 
+        raycast.worldMap.getCell(blockX, blockY) == 1;
 
     if(arduboy.justPressed(A_BUTTON))
     {
+        // Don't let them do bad things!
+        if(error_state)
+        {
+            sound.tone(200, 128);
+            return;
+        }
 
+        // Place a random tile. We have 8 other tiles to choose from, why not just be random? Place
+        sound.tone(600, 64);
+        raycast.worldMap.setCell(blockX, blockY, 2 + random(8));
     }
     else if(arduboy.justPressed(B_BUTTON))
     {
+        if(error_state)
+        {
+            sound.tone(200, 128);
+            return;
+        }
 
+        // Remove the tile (0 is always empty, even if you have it defined in your tileset)
+        sound.tone(400, 64);
+        raycast.worldMap.setCell(blockX, blockY, 0);
     }
-
-    // Example of perhaps a "flashlight"
-    if (arduboy.pressed(A_BUTTON))
-        raycast.instance.setLightIntensity(3.0); 
-    else
-        raycast.instance.setLightIntensity(1.0);
 }
 
 
@@ -94,6 +108,8 @@ void setup()
 {
     arduboy.begin();
     arduboy.setFrameRate(FRAMERATE); 
+
+    arduboy.initRandomSeed();
 
     // Since we're letting the player set blocks, let's simply fill in the perimeter of the 
     // room with the "unbreakable" tile.
