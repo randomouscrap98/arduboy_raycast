@@ -8,39 +8,40 @@
 constexpr uint8_t RCMAXMAPDIMENSION = 16;
 
 // A single raycast map
-class RcMap {
-    public:
-        uint8_t * map;
-        uint8_t width;
-        uint8_t height;
+class RcMap 
+{
+public:
+    uint8_t * map;
+    uint8_t width;
+    uint8_t height;
 
-        inline uint8_t getIndex(uint8_t x, uint8_t y)
-        {
-            return y * this->width + x;
-        }
+    void setCell(uint8_t x, uint8_t y, uint8_t tile)
+    {
+        this->map[this->getIndex(x, y)] = tile;
+    }
 
-        inline uint8_t getCell(uint8_t x, uint8_t y)
-        {
-            return this->map[this->getIndex(x, y)];
-        }
+    // Fill map with all of the given tile
+    void fillMap(uint8_t tile)
+    {
+        memset(this->map, tile, size_t(this->width * this->height));
+    }
 
-        void setCell(uint8_t x, uint8_t y, uint8_t tile);
+    // Draw the given maze starting at the given screen x + y
+    void drawMap(Arduboy2Base * arduboy, uint8_t x, uint8_t y)
+    {
+        //This is INCREDIBLY slow but should be fine
+        for(uint8_t i = 0; i < this->height; ++i)
+            for(uint8_t j = 0; j < this->width; ++j)
+                arduboy->drawPixel(x + j, y + i, this->getCell(j, this->height - i - 1) ? WHITE : BLACK);
+    }
 
-        // Fill map with all of the given tile
-        void fillMap(uint8_t tile);
+    inline uint8_t getIndex(uint8_t x, uint8_t y)
+    {
+        return y * this->width + x;
+    }
 
-        // Draw the given maze starting at the given screen x + y
-        void drawMap(Arduboy2Base * arduboy, uint8_t x, uint8_t y);
+    inline uint8_t getCell(uint8_t x, uint8_t y)
+    {
+        return this->map[this->getIndex(x, y)];
+    }
 };
-
-// Representation of the player in an rcmap
-class RcPlayer {
-    public:
-        uflot posX;
-        uflot posY;
-        float dirX; //These HAVE TO be float, or something with a lot more precision
-        float dirY; 
-
-        void initPlayerDirection(float angle, float fov);
-};
-

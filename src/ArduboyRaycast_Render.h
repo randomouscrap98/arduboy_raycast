@@ -5,7 +5,8 @@
 
 #include "ArduboyRaycast_Utils.h"
 #include "ArduboyRaycast_Map.h"
-#include "ArduboyRaycast_Sprite.h"
+#include "ArduboyRaycast_Player.h"
+#include "ArduboyRaycast_SpriteGroup.h"
 #include "ArduboyRaycast_Shading.h"
 
 // Unless you ask for custom flags, raycaster just sets some sane defaults
@@ -31,7 +32,7 @@ constexpr uint8_t RCTILESIZE = 16;
 
 // A container to hold raycasting state. 
 template<uint8_t W, uint8_t H>
-class RcInstance
+class RcRender
 {
 public:
     static constexpr uint8_t VIEWWIDTH = W;
