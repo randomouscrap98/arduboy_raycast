@@ -18,7 +18,8 @@ constexpr uint8_t RSTATEYOFFSET = 0b11111000;
 
 
 // Try to make this fit into as little space as possible
-struct RcSprite {
+struct RcSprite 
+{
     muflot x; //Precision for x/y is low but doesn't really need to be high
     muflot y;
     uint8_t frame = 0;
@@ -37,36 +38,37 @@ struct SSprite {
 };
 
 // A box representing bounds that the player shouldn't be able to walk into. Not necessarily tied to a sprite
-class RcBounds {
-    public:
-        muflot x1;
-        muflot y1;
-        muflot x2;
-        muflot y2;
-        uint8_t state; //some of the same as RSprite, where & 1 = active
+class RcBounds 
+{
+public:
+    muflot x1;
+    muflot y1;
+    muflot x2;
+    muflot y2;
+    uint8_t state; //some of the same as RSprite, where & 1 = active
 
-        inline bool colliding(uflot x, uflot y) {
-            return x > this->x1 && x < this->x2 && y > this->y1 && y < this->y2;
-        }
+    inline bool colliding(uflot x, uflot y) {
+        return x > this->x1 && x < this->x2 && y > this->y1 && y < this->y2;
+    }
 };
 
 class RcSpriteGroup
 {
-    public:
-        RcSprite * sprites;
-        SSprite * tempsorting;
-        const uint8_t numsprites;
-        RcBounds * bounds;
-        const uint8_t numbounds;
+public:
+    RcSprite * sprites;
+    SSprite * tempsorting;
+    const uint8_t numsprites;
+    RcBounds * bounds;
+    const uint8_t numbounds;
 
-        void resetSprites();
-        void resetBounds();
-        void resetAll();
-        void runSprites(Arduboy2Base * arduboy);
+    void resetSprites();
+    void resetBounds();
+    void resetAll();
+    void runSprites(Arduboy2Base * arduboy);
 
-        //Sort sprites within the sprite contiainer (only affects the sorted list). returns number of active sprites
-        uint8_t sortSprites(uflot playerX, uflot playerY);
-        RcSprite * addSprite(float x, float y, uint8_t frame, uint8_t shrinkLevel, int8_t heightAdjust, behavior_func func);
+    //Sort sprites within the sprite contiainer (only affects the sorted list). returns number of active sprites
+    uint8_t sortSprites(uflot playerX, uflot playerY);
+    RcSprite * addSprite(float x, float y, uint8_t frame, uint8_t shrinkLevel, int8_t heightAdjust, behavior_func func);
 };
 
 

@@ -31,7 +31,7 @@ constexpr uint8_t RCTILESIZE = 16;
 
 // A container to hold raycasting state. 
 template<uint8_t W, uint8_t H>
-class RaycastInstance
+class RcInstance
 {
 public:
     static constexpr uint8_t VIEWWIDTH = W;
@@ -74,7 +74,6 @@ public:
     // The full function for raycasting. 
     void raycastWalls(RcPlayer * p, RcMap * map, Arduboy2Base * arduboy)
     {
-        //Waste ~20 bytes of stack to save numerous cycles on render (and on programmer. leaving posX + posY floats so...)
         uint8_t pmapX = p->posX.getInteger();
         uint8_t pmapY = p->posY.getInteger();
         uflot pmapofsX = p->posX - pmapX;
@@ -85,8 +84,6 @@ public:
         uflot darkness = this->_darkness;
         uflot viewdistance = this->_viewdistance;
         uflot * distCache = this->_distCache;
-
-        //flot planeX = dY * (flot)state->fakefov, planeY = - dX * (flot)state->fakefov; // Camera vector or something, simple -90 degree rotate from dir
 
         uint8_t shade = 0;
         uint8_t texX = 0;
