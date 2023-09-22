@@ -123,6 +123,10 @@ void setup()
         raycast.worldMap.setCell(x, 0, 1);
         raycast.worldMap.setCell(x, raycast.worldMap.height - 1, 1);
     }
+
+    // Example of how to increase the view distance (lowers performance). Default is 1.0.
+    // I don't think brightness is linear? I don't remember...
+    raycast.instance.setLightIntensity(4.0);
 }
 
 void loop()
