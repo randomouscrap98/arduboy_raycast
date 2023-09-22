@@ -8,14 +8,6 @@
 #include "ArduboyRaycast_Sprite.h"
 
 
-// These are the things you can set pre-emptively, they absolutely MUST be constants
-#ifndef RCVIEWWIDTH
-#define RCVIEWWIDTH WIDTH
-#endif
-#ifndef RCVIEWHEIGHT
-#define RCVIEWHEIGHT HEIGHT
-#endif
-
 // Unless you ask for custom flags, raycaster just sets some sane defaults
 #ifndef RCCUSTOMFLAGS
 // Visualization flags (barely impacts performance) 
@@ -30,21 +22,9 @@
 #endif
 
 // -------------- CALCULATED / ASSUMED CONSTANTS, TRY NOT TO TOUCH ------------------------
-// Graphics constants
-constexpr uint8_t VIEWWIDTH = RCVIEWWIDTH;
-constexpr uint8_t VIEWHEIGHT = RCVIEWHEIGHT;
 // Screen
-constexpr uint8_t MIDSCREENY = VIEWHEIGHT / 2;
-constexpr uint8_t MIDSCREENX = VIEWWIDTH / 2;
-constexpr flot INVWIDTH = 1.0 / VIEWWIDTH;
-constexpr flot INVHEIGHT = 1.0 / VIEWHEIGHT;
-constexpr flot INVWIDTH2 = 2.0f / VIEWWIDTH;
 constexpr uint8_t BWIDTH = WIDTH >> 3;
 // Distance stuff; if you need to change this for some reason, idk just reconsider I guess
-constexpr uint8_t LDISTSAFE = 16;
-constexpr uflot MINLDISTANCE = 1.0f / LDISTSAFE;
-constexpr uint16_t MAXLHEIGHT = VIEWHEIGHT * LDISTSAFE;
-constexpr float MINSPRITEDISTANCE = 0.2;
 // Some assumptions (please try to follow these instead of changing them)
 constexpr uint8_t RCEMPTY = 0;
 constexpr uint8_t RCTILESIZE = 16;
@@ -52,9 +32,22 @@ constexpr uint8_t RCTILESIZE = 16;
 
 
 // A container to hold raycasting state. 
+template<uint8_t W, uint8_t H>
 class RaycastInstance
 {
     public:
+        static constexpr uint8_t VIEWWIDTH = W;
+        static constexpr uint8_t VIEWHEIGHT = H;
+        static constexpr uint8_t MIDSCREENY = VIEWHEIGHT / 2;
+        static constexpr uint8_t MIDSCREENX = VIEWWIDTH / 2;
+        static constexpr flot INVWIDTH = 1.0 / VIEWWIDTH;
+        static constexpr flot INVHEIGHT = 1.0 / VIEWHEIGHT;
+        static constexpr flot INVWIDTH2 = 2.0f / VIEWWIDTH;
+        static constexpr uint8_t LDISTSAFE = 16;
+        static constexpr uflot MINLDISTANCE = 1.0f / LDISTSAFE;
+        static constexpr uint16_t MAXLHEIGHT = VIEWHEIGHT * LDISTSAFE;
+        static constexpr float MINSPRITEDISTANCE = 0.2;
+
         uflot lightintensity = 1.0;     // Impacts view distance + shading even when no shading applied
         const uint8_t * tilesheet = NULL;
         const uint8_t * spritesheet = NULL;
@@ -73,12 +66,13 @@ class RaycastInstance
         void raycastWalls(RcPlayer * p, RcMap * map, Arduboy2Base * arduboy);
 
         void drawSprites(RcPlayer * player, RcSpriteGroup * group, Arduboy2Base * arduboy);
+
+        inline void clearRaycast(Arduboy2Base * arduboy)
+        {
+            fastClear(arduboy, 0, 0, VIEWWIDTH, VIEWHEIGHT);
+        }
+
+        //Draw a single raycast wall line. Will only draw specifically the wall line and will clip out all the rest
+        //(so you can predraw a ceiling and floor before calling raycast)
+        void drawWallLine(uint8_t x, uint16_t lineHeight, uint8_t shade, uint16_t texData, Arduboy2Base * arduboy);
 };
-
-// Full clear specifically the raycast area. Note that if your view height is not aligned to a byte boundary,
-// this will overclear the raycast area.
-void clearRaycast(Arduboy2Base * arduboy);
-
-//Draw a single raycast wall line. Will only draw specifically the wall line and will clip out all the rest
-//(so you can predraw a ceiling and floor before calling raycast)
-void drawWallLine(uint8_t x, uint16_t lineHeight, uint8_t shade, uint16_t texData, Arduboy2Base * arduboy);

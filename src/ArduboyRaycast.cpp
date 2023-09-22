@@ -1,12 +1,8 @@
 #include "ArduboyRaycast.h"
 #include "ArduboyRaycast_Shading.h"
 
-void clearRaycast(Arduboy2Base * arduboy)
-{
-    fastClear(arduboy, 0, 0, VIEWWIDTH, VIEWHEIGHT);
-}
-
-void drawWallLine(uint8_t x, uint16_t lineHeight, uint8_t shade, uint16_t texData, Arduboy2Base * arduboy) 
+template<uint8_t W, uint8_t H>
+void RaycastInstance<W,H>::drawWallLine(uint8_t x, uint16_t lineHeight, uint8_t shade, uint16_t texData, Arduboy2Base * arduboy) 
 {
     // ------- BEGIN CRITICAL SECTION -------------
     int16_t halfLine = lineHeight >> 1;
@@ -125,7 +121,8 @@ void drawWallLine(uint8_t x, uint16_t lineHeight, uint8_t shade, uint16_t texDat
     // ------- END CRITICAL SECTION -------------
 }
 
-void RaycastInstance::setLightIntensity(uflot intensity)
+template<uint8_t W, uint8_t H>
+void RaycastInstance<W,H>::setLightIntensity(uflot intensity)
 {
     this->lightintensity = intensity;
     this->_viewdistance = sqrt(BAYERGRADIENTS * (float)intensity);
@@ -133,7 +130,8 @@ void RaycastInstance::setLightIntensity(uflot intensity)
 }
 
 
-void RaycastInstance::raycastWalls(RcPlayer * p, RcMap * map, Arduboy2Base * arduboy)
+template<uint8_t W, uint8_t H>
+void RaycastInstance<W, H>::raycastWalls(RcPlayer * p, RcMap * map, Arduboy2Base * arduboy)
 {
     //Waste ~20 bytes of stack to save numerous cycles on render (and on programmer. leaving posX + posY floats so...)
     uint8_t pmapX = p->posX.getInteger();
@@ -291,7 +289,8 @@ void RaycastInstance::raycastWalls(RcPlayer * p, RcMap * map, Arduboy2Base * ard
     }
 }
 
-void RaycastInstance::drawSprites(RcPlayer * player, RcSpriteGroup * group, Arduboy2Base * arduboy)
+template<uint8_t W, uint8_t H>
+void RaycastInstance<W,H>::drawSprites(RcPlayer * player, RcSpriteGroup * group, Arduboy2Base * arduboy)
 {
     uint8_t usedSprites = group->sortSprites(player->posX, player->posY);
 
