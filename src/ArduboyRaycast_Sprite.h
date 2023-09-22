@@ -5,10 +5,6 @@
 
 #include "ArduboyRaycast_Utils.h"
 
-// As with raycast.h, I unfortunately require you to make changes to this file if you
-// want different results.
-constexpr uint8_t RSINTERNALSTATEBYTES = 2;
-
 // These are bitmasks to get data out of state
 constexpr uint8_t RSSTATEACTIVE = 0b00000001;
 constexpr uint8_t RSSTATESHRINK = 0b00000110;
@@ -18,22 +14,25 @@ constexpr uint8_t RSTATEYOFFSET = 0b11111000;
 
 
 // Try to make this fit into as little space as possible
-struct RcSprite 
+template<uint8_t InternalStateBytes>
+class RcSprite 
 {
+public:
     muflot x; //Precision for x/y is low but doesn't really need to be high
     muflot y;
     uint8_t frame = 0;
     uint8_t state = 0; // First bit is active, next 2 are how many times to /2 for size
-    void (* behavior)(RcSprite*,Arduboy2Base*) = NULL;
+    void (* behavior)(RcSprite<InternalStateBytes> *,Arduboy2Base*) = NULL;
 
-    uint8_t intstate[RSINTERNALSTATEBYTES];
+    uint8_t intstate[InternalStateBytes];
 };
 
-typedef void (* behavior_func)(RcSprite *,Arduboy2Base *);
+//typedef void (* behavior_func)(RcSprite *,Arduboy2Base *);
 
 // Sorted sprite. Useful to keep original sprite list index as sprite ids 
+template<uint8_t InternalStateBytes>
 struct SSprite {
-    RcSprite * sprite; 
+    RcSprite<InternalStateBytes> * sprite; 
     SFixed<11,4> distance;    //Unfortunately, distance kinda has to be large... 12 bits = 4096, should be more than enough
 };
 
@@ -52,23 +51,107 @@ public:
     }
 };
 
+template<uint8_t InternalStateBytes>
 class RcSpriteGroup
 {
 public:
-    RcSprite * sprites;
-    SSprite * tempsorting;
+    RcSprite<InternalStateBytes> * sprites;
+    SSprite<InternalStateBytes> * sortedSprites;
     const uint8_t numsprites;
     RcBounds * bounds;
     const uint8_t numbounds;
 
-    void resetSprites();
-    void resetBounds();
-    void resetAll();
-    void runSprites(Arduboy2Base * arduboy);
+    void resetSprites()
+    {
+        memset(this->sprites, 0, sizeof(RcSprite<InternalStateBytes>) * this->numsprites);
+    }
+
+    void resetBounds()
+    {
+        memset(this->bounds, 0, sizeof(RcBounds) * this->numbounds);
+    }
+
+    void resetAll()
+    {
+        this->resetBounds();
+        this->resetSprites();
+    }
+
+    void runSprites(Arduboy2Base * arduboy)
+    {
+        uint8_t numsprites = this->numsprites;
+        for(uint8_t i = 0; i < numsprites; i++)
+        {
+            RcSprite<InternalStateBytes> * sprite = &this->sprites[i];
+            if(!ISSPRITEACTIVE((*sprite)))
+                continue;
+            
+            if(sprite->behavior)
+                sprite->behavior(sprite, arduboy);
+        }
+    }
 
     //Sort sprites within the sprite contiainer (only affects the sorted list). returns number of active sprites
-    uint8_t sortSprites(uflot playerX, uflot playerY);
-    RcSprite * addSprite(float x, float y, uint8_t frame, uint8_t shrinkLevel, int8_t heightAdjust, behavior_func func);
+    uint8_t sortSprites(uflot playerX, uflot playerY)
+    {
+        SFixed<11,4> fposx = (SFixed<11,4>)playerX;
+        SFixed<11,4> fposy = (SFixed<11,4>)playerY;
+
+        //Make a temp sort array on stack
+        uint8_t numsprites = this->numsprites;
+        uint8_t usedSprites = 0;
+        SSprite<InternalStateBytes> * sorted = this->sortedSprites;
+        
+        // Calc distance. Also, sort elements (might as well, we're already here)
+        for (uint8_t i = 0; i < numsprites; ++i)
+        {
+            RcSprite<InternalStateBytes> * sprite = &this->sprites[i];
+
+            if (!ISSPRITEACTIVE((*sprite)))
+                continue;
+
+            SSprite<InternalStateBytes> toSort;
+            SFixed<11,4> dpx = (SFixed<11,4>)sprite->x - fposx;
+            SFixed<11,4> dpy = (SFixed<11,4>)sprite->y - fposy;
+            toSort.distance = dpx * dpx + dpy * dpy; // sqrt not taken, unneeded
+            toSort.sprite = sprite;
+
+            //Insertion sort (it's faster for small arrays; if you increase sprite count to some 
+            //absurd number, change this to something else).
+            int8_t insertPos = usedSprites - 1;
+
+            while(insertPos >= 0 && sorted[insertPos].distance < toSort.distance)
+            {
+                sorted[insertPos + 1] = sorted[insertPos];
+                insertPos--;
+            }
+
+            sorted[insertPos + 1] = toSort;
+            usedSprites++;
+        }
+
+        return usedSprites;
+    }
+
+    RcSprite<InternalStateBytes> * addSprite(float x, float y, uint8_t frame, uint8_t shrinkLevel, int8_t heightAdjust, void (* func)(RcSprite<InternalStateBytes> *,Arduboy2Base*))
+    {
+        uint8_t numsprites = this->numsprites;
+        for(uint8_t i = 0; i < numsprites; i++)
+        {
+            RcSprite<InternalStateBytes> * sprite = &this->sprites[i];
+            if(!ISSPRITEACTIVE((*sprite)))
+            {
+                sprite->x = muflot(x);
+                sprite->y = muflot(y);
+                sprite->frame = frame;
+                sprite->state = 1 | ((shrinkLevel << 1) & RSSTATESHRINK) | (heightAdjust < 0 ? 16 : 0) | ((abs(heightAdjust) << 3) & RSTATEYOFFSET);
+                sprite->behavior = func;
+                return sprite;
+            }
+        }
+
+        return NULL;
+    }
 };
 
 
