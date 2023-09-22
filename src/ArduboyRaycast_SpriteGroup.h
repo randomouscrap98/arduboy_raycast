@@ -107,14 +107,14 @@ public:
     //Get the first bounding box (in order of ID) which intersects this point
     RcBounds * firstColliding(uflot x, uflot y)
     {
-        uint8_t numbounds = sprites->numbounds;
+        uint8_t numbounds = this->numbounds;
         for (uint8_t i = 0; i < numbounds; i++)
         {
-            if (!ISSPRITEACTIVE((sprites->bounds[i])))
+            if (!ISSPRITEACTIVE((this->bounds[i])))
                 continue;
 
-            if(sprite->bounds[i].colliding(x, y))
-                return &sprite->bounds[i];
+            if(this->bounds[i].colliding(x, y))
+                return &this->bounds[i];
         }
 
         return NULL;

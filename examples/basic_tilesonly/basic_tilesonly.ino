@@ -72,7 +72,7 @@ void movement()
     if (arduboy.pressed(LEFT_BUTTON))
         rotation = ROTSPEED;
 
-    raycast.movePlayer(movement, rotation, &isSolid);
+    raycast.player.tryMovement(movement, rotation, &isSolid);
 }
 
 // Just an example of setting the light level, this isn't necessary
@@ -80,9 +80,9 @@ void flashlight()
 {
     // Example of perhaps a "flashlight"
     if (arduboy.pressed(A_BUTTON))
-        raycast.instance.setLightIntensity(3.0); 
+        raycast.render.setLightIntensity(3.0); 
     else
-        raycast.instance.setLightIntensity(1.0);
+        raycast.render.setLightIntensity(1.0);
 }
 
 
