@@ -2,7 +2,7 @@
 
 #include <Arduboy2.h>
 #include "ArduboyRaycast_Draw.h"
-
+#include "ArduboyRaycast_Extra.h"
 
 template <uint8_t SpriteCount, uint8_t InternalStateBytes, uint8_t ScreenWidth, uint8_t ScreenHeight>
 class RcContainer
@@ -19,6 +19,7 @@ public:
 
     RcInstance<ScreenWidth, ScreenHeight> instance;
 
+
     RcContainer(const uint8_t * tilesheet, const uint8_t * spritesheet, const uint8_t * spritesheet_mask) 
     {
         sprites.sprites = this->spritesBuffer;
@@ -30,6 +31,12 @@ public:
         worldMap.map = this->mapBuffer;
         worldMap.width = RCMAXMAPDIMENSION;
         worldMap.height = RCMAXMAPDIMENSION;
+
+        // Start in the upper corner
+        player.posX = 1.5;
+        player.posY = 1.5;
+        player.dirX = 0;
+        player.dirY = 1;
 
         instance.tilesheet = tilesheet;
         instance.spritesheet = spritesheet;
@@ -44,5 +51,10 @@ public:
             this->sprites.runSprites(&arduboy);
             this->instance.drawSprites(&this->player, &this->sprites, &arduboy);
         }
+    }
+
+    void tryMovement(float movement, float rotation, bool (* solidChecker)(uint8_t,uint8_t))
+    {
+        tryMovement(&this->player, &this->sprites, movement, rotation, solidChecker);
     }
 };
