@@ -55,7 +55,7 @@ void movement()
     if (arduboy.pressed(LEFT_BUTTON))
         rotation = ROTSPEED;
 
-    raycast.movePlayer(movement, rotation, &isSolid);
+    raycast.player.tryMovement(movement, rotation, &isSolid);
 }
 
 // Function for letting the player place or remove blocks.
@@ -126,7 +126,7 @@ void setup()
 
     // Example of how to increase the view distance (lowers performance). Default is 1.0.
     // I don't think brightness is linear? I don't remember...
-    raycast.instance.setLightIntensity(4.0);
+    raycast.render.setLightIntensity(4.0);
 }
 
 void loop()
