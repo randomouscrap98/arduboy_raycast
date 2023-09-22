@@ -57,9 +57,9 @@ class RcSpriteGroup
 public:
     RcSprite<InternalStateBytes> * sprites;
     SSprite<InternalStateBytes> * sortedSprites;
-    const uint8_t numsprites;
+    uint8_t numsprites;
     RcBounds * bounds;
-    const uint8_t numbounds;
+    uint8_t numbounds;
 
     void resetSprites()
     {

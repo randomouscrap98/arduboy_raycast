@@ -19,7 +19,6 @@ public:
 
     RcInstance<ScreenWidth, ScreenHeight> instance;
 
-
     RcContainer(const uint8_t * tilesheet, const uint8_t * spritesheet, const uint8_t * spritesheet_mask) 
     {
         sprites.sprites = this->spritesBuffer;
@@ -45,15 +44,15 @@ public:
 
     void runIteration(Arduboy2Base * arduboy)
     {
-        this->instance.raycastWalls(&this->player, &this->worldMap, &arduboy);
-        if(this->instance->tilesheet)
+        this->instance.raycastWalls(&this->player, &this->worldMap, arduboy);
+        if(this->instance.tilesheet)
         {
-            this->sprites.runSprites(&arduboy);
-            this->instance.drawSprites(&this->player, &this->sprites, &arduboy);
+            this->sprites.runSprites(arduboy);
+            this->instance.drawSprites(&this->player, &this->sprites, arduboy);
         }
     }
 
-    void tryMovement(float movement, float rotation, bool (* solidChecker)(uint8_t,uint8_t))
+    void movePlayer(float movement, float rotation, bool (* solidChecker)(uint8_t,uint8_t))
     {
         tryMovement(&this->player, &this->sprites, movement, rotation, solidChecker);
     }

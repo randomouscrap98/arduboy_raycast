@@ -25,22 +25,22 @@ Arduboy2 arduboy;
 
 // Some static map in progmem. You could load this however you want. Note that maps by default are
 // only 16x16 in the raycaster. It's fast to load a new map (basically instant)
-constexpr uint8_t mymap[] PROGMEM = {
+constexpr uint8_t mymap[RCMAXMAPDIMENSION * RCMAXMAPDIMENSION] PROGMEM = {
     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
     1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+    1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 1,
+    1, 0, 0, 0, 2, 0, 0, 3, 0, 3, 0, 0, 4, 0, 0, 1,
+    1, 0, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 1,
+    1, 0, 0, 0, 0, 0, 0, 3, 0, 3, 0, 0, 4, 0, 0, 1,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 1,
+    1, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 4, 0, 0, 1,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 1,
+    1, 0, 7, 7, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 5, 0, 5, 0, 1,
+    1, 0, 7, 7, 7, 0, 6, 6, 6, 0, 5, 0, 0, 5, 0, 1,
+    1, 0, 0, 0, 0, 0, 0, 6, 0, 0, 5, 0, 5, 5, 0, 1,
+    1, 0, 7, 7, 7, 0, 6, 6, 6, 0, 5, 0, 0, 5, 0, 1,
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 5, 0, 1,
     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
 };
 
@@ -72,24 +72,38 @@ void movement()
     if (arduboy.pressed(LEFT_BUTTON))
         rotation = ROTSPEED;
 
-    raycast.tryMovement(movement, rotation, &isSolid);
+    raycast.movePlayer(movement, rotation, &isSolid);
 }
 
+// Just an example of setting the light level, this isn't necessary
+void flashlight()
+{
+    // Example of perhaps a "flashlight"
+    if (arduboy.pressed(A_BUTTON))
+        raycast.instance.setLightIntensity(3.0); 
+    else
+        raycast.instance.setLightIntensity(1.0);
+}
+
+
+// The normal arduino setup. Here, we can copy our map out of program memory and into 
+// the map buffer in memory. 
 void setup()
 {
     arduboy.begin();
     arduboy.setFrameRate(FRAMERATE); 
 
     // This is how you'd load a map out of program memory
-    memcpy_P(raycast.mapBuffer, mymap, raycast.worldMap.width * raycast.worldMap.height);
+    memcpy_P(raycast.mapBuffer, mymap, RCMAXMAPDIMENSION * RCMAXMAPDIMENSION);
 }
 
 void loop()
 {
     if(!arduboy.nextFrame()) return;
 
-    // Process movement, or however you'd like to do it
+    // Process player interaction, or however you'd like to do it
     movement();
+    flashlight();
 
     // If you're trying to be optimal, you could only clear the raycasting portion using this
     // raycast.instance.clearRaycast(&arduboy);
@@ -101,4 +115,6 @@ void loop()
 
     // Then just do a raycast iteration
     raycast.runIteration(&arduboy);
+
+    arduboy.display();
 }

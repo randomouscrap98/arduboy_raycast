@@ -66,6 +66,10 @@ public:
     // when necessary
     void setLightIntensity(uflot intensity)
     {
+        // Skip complicated calcs
+        if(intensity == this->lightintensity)
+            return;
+
         this->lightintensity = intensity;
         this->_viewdistance = sqrt(BAYERGRADIENTS * (float)intensity);
         this->_darkness = 1 / intensity;

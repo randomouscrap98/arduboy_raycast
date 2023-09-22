@@ -11,8 +11,8 @@ constexpr uint8_t RCMAXMAPDIMENSION = 16;
 class RcMap {
     public:
         uint8_t * map;
-        const uint8_t width;
-        const uint8_t height;
+        uint8_t width;
+        uint8_t height;
 
         inline uint8_t getIndex(uint8_t x, uint8_t y)
         {
