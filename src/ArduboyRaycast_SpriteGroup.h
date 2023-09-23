@@ -2,6 +2,8 @@
 
 #include "ArduboyRaycast_Sprite.h"
 
+#define ISSPRITEACTIVE(s) (s.state & RSSTATEACTIVE)
+
 template<uint8_t InternalStateBytes>
 class RcSpriteGroup
 {
@@ -28,7 +30,7 @@ public:
         this->resetSprites();
     }
 
-    void runSprites(Arduboy2Base * arduboy)
+    void runSprites()
     {
         uint8_t numsprites = this->numsprites;
         for(uint8_t i = 0; i < numsprites; i++)
@@ -38,7 +40,7 @@ public:
                 continue;
             
             if(sprite->behavior)
-                sprite->behavior(sprite, arduboy);
+                sprite->behavior(sprite);
         }
     }
 
@@ -86,7 +88,7 @@ public:
 
     // Attempt to add a sprite to the sprite list. Activates the sprite immediately and fills out some of the more 
     // complicated fields.
-    RcSprite<InternalStateBytes> * addSprite(float x, float y, uint8_t frame, uint8_t sizeLevel, int8_t heightAdjust, void (* func)(RcSprite<InternalStateBytes> *,Arduboy2Base*))
+    RcSprite<InternalStateBytes> * addSprite(float x, float y, uint8_t frame, uint8_t sizeLevel, int8_t heightAdjust, void (* func)(RcSprite<InternalStateBytes> *))
     {
         uint8_t numsprites = this->numsprites;
         for(uint8_t i = 0; i < numsprites; i++)
@@ -137,6 +139,9 @@ public:
         float halfsize = size / 2;
         return this->addBounds((float)sprite->x - halfsize, (float)sprite->y - halfsize, (float)sprite->x + halfsize, (float)sprite->y + halfsize);
     }
+
+    void deleteBounds(RcBounds * bounds) { bounds->state = 0; }
+    void deleteSprite(RcSprite<InternalStateBytes> * sprite) { sprite->state = 0; }
 
     //Get the first bounding box (in order of ID) which intersects this point
     RcBounds * firstColliding(uflot x, uflot y)

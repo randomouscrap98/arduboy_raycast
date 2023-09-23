@@ -1,3 +1,13 @@
+/*
+    In this example, we're going to simply place coins in a room. Some will
+    bob up and down as an animation, some will do a rotation animation, 
+    and some will do both. All of them will showcase the "behavior" function
+    of sprites, which allows you to attach a function to a sprite to have it
+    do something every frame.
+
+    You can't do anything with the coins yet, but in a later example, we'll
+    show how to detect collision with the sprites and remove them.
+*/
 #include <Arduboy2.h>
 #include <FixedPoints.h>
 #include <ArduboyRaycast.h>
@@ -8,12 +18,11 @@
 #include "spritesheet.h"
 
 // Gameplay constants. You don't have to define these, but it's nice to have
-constexpr uint8_t FRAMERATE = 25;   //Sprites are a bit heavier; at this full width resolution, you'll get frame drops.
+constexpr uint8_t FRAMERATE = 30; 
 constexpr float MOVESPEED = 2.5f / FRAMERATE;
 constexpr float ROTSPEED = 3.0f / FRAMERATE;
 
-// Let's have 16 sprites and again only 1 byte of internal storage. This 
-// time, we actually do have a spritesheet, so let's load those
+// Let's have 16 sprites and only 1 byte of internal storage.
 RcContainer<16, 1, WIDTH, HEIGHT> raycast(tilesheet, spritesheet, spritesheet_Mask);
 
 Arduboy2 arduboy;
@@ -24,11 +33,11 @@ Arduboy2 arduboy;
 constexpr uint8_t mymap[RCMAXMAPDIMENSION * RCMAXMAPDIMENSION] PROGMEM = {
     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
     1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1,
+    1, 0, 2, 2, 0, 2, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1,
     1, 0, 2, 0, 0, 2, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1,
-    1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1,
-    1, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 1,
-    1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1,
-    1, 0, 2, 0, 0, 2, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1,
+    1, 0, 0, 0, 2, 2, 0, 3, 0, 0, 0, 0, 0, 0, 0, 1,
+    1, 0, 2, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1,
+    1, 0, 2, 2, 0, 2, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1,
     1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1,
     1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1,
     1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,

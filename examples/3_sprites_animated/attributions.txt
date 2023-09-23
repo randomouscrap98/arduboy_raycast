@@ -1,1 +1,3 @@
-- All art in this one is mine, feel free to use it (even though it's kinda crap lol)
+- Tileset comes from https://piiixl.itch.io/1-bit-patterns-and-tiles, thank you!
+- Coin sprites come from https://dani-maccari.itch.io/1bit-platformer-doungeoun, thank you!
+- Background is from me, use it however you like

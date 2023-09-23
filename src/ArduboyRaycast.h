@@ -46,7 +46,7 @@ public:
         this->render.raycastWalls(&this->player, &this->worldMap, arduboy);
         if(this->render.tilesheet)
         {
-            this->sprites.runSprites(arduboy);
+            this->sprites.runSprites();
             this->render.drawSprites(&this->player, &this->sprites, arduboy);
         }
     }

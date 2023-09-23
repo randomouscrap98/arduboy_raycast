@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Arduboy2.h>
 #include <FixedPoints.h>
 
 #include "ArduboyRaycast_Utils.h"
@@ -10,7 +9,6 @@ constexpr uint8_t RSSTATEACTIVE = 0b00000001;
 constexpr uint8_t RSSTATESIZE = 0b00000110;
 constexpr uint8_t RSTATEYOFFSET = 0b11111000;
 
-#define ISSPRITEACTIVE(s) (s.state & RSSTATEACTIVE)
 
 
 // Try to make this fit into as little space as possible
@@ -22,12 +20,10 @@ public:
     muflot y;
     uint8_t frame = 0;
     uint8_t state = 0; // First bit is active, next 2 are how many times to /2 for size
-    void (* behavior)(RcSprite<InternalStateBytes> *,Arduboy2Base*) = NULL;
+    void (* behavior)(RcSprite<InternalStateBytes> *) = NULL;
 
     uint8_t intstate[InternalStateBytes];
 };
-
-//typedef void (* behavior_func)(RcSprite *,Arduboy2Base *);
 
 // Sorted sprite. Useful to keep original sprite list index as sprite ids 
 template<uint8_t InternalStateBytes>
