@@ -20,6 +20,7 @@
 #define CRITICALLOOPUNROLLING   // This adds a large (~1.5kb) amount of code but significantly increases performance, especially sprites
 // Debug flags 
 // #define LINEHEIGHTDEBUG      // Display information about lineheight (only draws a few lines)
+// #define PRINTSPRITEDATA      // Display information about certain sprite-related properties
 #endif
 
 // -------------- CALCULATED / ASSUMED CONSTANTS, TRY NOT TO TOUCH ------------------------
@@ -51,6 +52,7 @@ public:
     const uint8_t * tilesheet = NULL;
     const uint8_t * spritesheet = NULL;
     const uint8_t * spritesheet_mask = NULL;
+    muflot spritescaling[4] = { 1.5, 1.0, 0.5, 0.25 };
 
     // I want these to be private but they're needed elsewhere
     uflot _viewdistance = 4.0;      // Calculated value
@@ -271,7 +273,7 @@ public:
 
             // calculate the dimensions of the sprite on screen. All sprites are square. Size mods go here
             // using 'transformY' instead of the real distance prevents fisheye
-            uint16_t spriteHeight = uint16_t(VIEWHEIGHT / transformYT) >> ((sprite.state & RSSTATESHRINK) >> 1); 
+            uint16_t spriteHeight = uint16_t(VIEWHEIGHT / transformYT * (float)this->spritescaling[(sprite.state & RSSTATESIZE) >> 1]);
             uint16_t spriteWidth = spriteHeight; 
 
             // calculate lowest and highest pixel to fill. Sprite screen/start X and Sprite screen/start Y
@@ -283,8 +285,8 @@ public:
             if(ssXe < 0 || ssX > VIEWWIDTH) continue;
 
             //Calculate vMove from top 5 bits of state
-            uint8_t yShiftBits = sprite.state >> 3;
-            int8_t yShift = yShiftBits ? int8_t((yShiftBits & 16 ? -(yShiftBits & 15) : yShiftBits) * 2.0 / transformYT) : 0;
+            uint8_t yShiftBits = ((sprite.state >> 1) >> 1) >> 1;
+            int8_t yShift = yShiftBits ? int8_t((yShiftBits & 16 ? -(yShiftBits & 15): (yShiftBits & 15)) * 2.0 / transformYT) : 0;
             //The above didn't work without float math, didn't feel like figuring out the ridiculous type casting
 
             int16_t ssY = -(spriteHeight >> 1) + MIDSCREENY + yShift;

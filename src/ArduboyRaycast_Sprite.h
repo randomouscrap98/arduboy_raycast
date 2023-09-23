@@ -7,7 +7,7 @@
 
 // These are bitmasks to get data out of state
 constexpr uint8_t RSSTATEACTIVE = 0b00000001;
-constexpr uint8_t RSSTATESHRINK = 0b00000110;
+constexpr uint8_t RSSTATESIZE = 0b00000110;
 constexpr uint8_t RSTATEYOFFSET = 0b11111000;
 
 #define ISSPRITEACTIVE(s) (s.state & RSSTATEACTIVE)

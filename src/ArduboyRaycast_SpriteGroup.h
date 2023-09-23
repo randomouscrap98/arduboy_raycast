@@ -86,7 +86,7 @@ public:
 
     // Attempt to add a sprite to the sprite list. Activates the sprite immediately and fills out some of the more 
     // complicated fields.
-    RcSprite<InternalStateBytes> * addSprite(float x, float y, uint8_t frame, uint8_t shrinkLevel, int8_t heightAdjust, void (* func)(RcSprite<InternalStateBytes> *,Arduboy2Base*))
+    RcSprite<InternalStateBytes> * addSprite(float x, float y, uint8_t frame, uint8_t sizeLevel, int8_t heightAdjust, void (* func)(RcSprite<InternalStateBytes> *,Arduboy2Base*))
     {
         uint8_t numsprites = this->numsprites;
         for(uint8_t i = 0; i < numsprites; i++)
@@ -97,7 +97,7 @@ public:
                 sprite->x = muflot(x);
                 sprite->y = muflot(y);
                 sprite->frame = frame;
-                sprite->state = RSSTATEACTIVE | ((shrinkLevel << 1) & RSSTATESHRINK) | (heightAdjust < 0 ? 16 : 0) | ((abs(heightAdjust) << 3) & RSTATEYOFFSET);
+                sprite->state = RSSTATEACTIVE | ((sizeLevel << 1) & RSSTATESIZE) | (heightAdjust < 0 ? 128 : 0) | ((abs(heightAdjust) << 3) & RSTATEYOFFSET);
                 sprite->behavior = func;
                 return sprite;
             }
@@ -120,6 +120,7 @@ public:
                 bounds->y1 = muflot(y1);
                 bounds->y2 = muflot(y2);
                 bounds->state = RSSTATEACTIVE;
+                return bounds;
             }
         }
 
@@ -134,7 +135,7 @@ public:
     RcBounds * addSpriteBounds(RcSprite<InternalStateBytes> * sprite, float size)
     {
         float halfsize = size / 2;
-        return this->addBounds(sprite->x - halfsize, sprite->y - halfsize, sprite->x + halfsize, sprite->y + halfsize);
+        return this->addBounds((float)sprite->x - halfsize, (float)sprite->y - halfsize, (float)sprite->x + halfsize, (float)sprite->y + halfsize);
     }
 
     //Get the first bounding box (in order of ID) which intersects this point
