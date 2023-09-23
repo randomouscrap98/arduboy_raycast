@@ -45,12 +45,11 @@ public:
     static constexpr uint8_t VIEWHEIGHT = H;
     static constexpr uint8_t MIDSCREENY = VIEWHEIGHT / 2;
     static constexpr uint8_t MIDSCREENX = VIEWWIDTH / 2;
-    static constexpr flot INVWIDTH = 1.0 / VIEWWIDTH;
-    static constexpr flot INVHEIGHT = 1.0 / VIEWHEIGHT;
+    static constexpr uflot INVWIDTH = 1.0 / VIEWWIDTH;
+    static constexpr float INVHEIGHT = 1.0 / VIEWHEIGHT;
     static constexpr flot INVWIDTH2 = 2.0f / VIEWWIDTH;
-    static constexpr uint8_t LDISTSAFE = 16;
-    static constexpr uflot MINLDISTANCE = 1.0f / LDISTSAFE;
-    static constexpr uint16_t MAXLHEIGHT = VIEWHEIGHT * LDISTSAFE;
+    static constexpr uint16_t MAXLHEIGHT = 32768;
+    static constexpr float MINLDISTANCE = 1.0f / MAXLHEIGHT;
     static constexpr float MINSPRITEDISTANCE = 0.2;
 
     uflot lightintensity = 1.0;     // Impacts view distance + shading even when no shading applied
@@ -227,7 +226,7 @@ public:
 
             // Calculate half height of line to draw on screen. We already know the distance to the wall.
             // We can truncate the total height if too close to the wall right here and now and avoid future checks.
-            uint16_t lineHeight = (perpWallDist <= MINLDISTANCE) ? MAXLHEIGHT : (VIEWHEIGHT / (float)perpWallDist);
+            //uint16_t lineHeight = (perpWallDist <= MINLDISTANCE) ? MAXLHEIGHT : (VIEWHEIGHT / (float)perpWallDist);
 
             #ifdef RCLINEHEIGHTDEBUG
             tinyfont.setCursor(16, x * 16);
@@ -238,9 +237,139 @@ public:
             #endif
 
             //ending should be exclusive
-            drawWallLine(x, lineHeight, shade, texData, arduboy);
+            drawWallLine(x, perpWallDist, shade, texData, arduboy);
         }
     }
+
+    //Draw a single raycast wall line. Will only draw specifically the wall line and will clip out all the rest
+    //(so you can predraw a ceiling and floor before calling raycast)
+    void drawWallLine(uint8_t x, uflot distance, uint8_t shade, uint16_t texData, Arduboy2Base * arduboy)
+    {
+        float invLineHeight = INVHEIGHT * (float)distance; 
+        UFixed<16,16> step = RCTILESIZE * invLineHeight;
+
+        uint16_t lineHeight = (invLineHeight <= MINLDISTANCE) ? MAXLHEIGHT : (uint16_t)(1 / invLineHeight);
+
+        // ------- BEGIN CRITICAL SECTION -------------
+        int16_t halfLine = lineHeight >> 1;
+        uint8_t yStart = max(0, MIDSCREENY - halfLine);
+        uint8_t yEnd = min(VIEWHEIGHT, MIDSCREENY + halfLine); //EXCLUSIVE
+
+        //Everyone prefers the high precision tiles (and for some reason, it's now faster? so confusing...)
+        //UFixed<16,16> step = (float)RCTILESIZE / lineHeight; //NOTE: float division is faster than UFixed<16,16> here!!
+        UFixed<16,16> texPos = (yStart + halfLine - MIDSCREENY) * step;
+
+        //These four variables are needed as part of the loop unrolling system
+        uint16_t bofs;
+        uint8_t texByte;
+        uint8_t thisWallByte = (((yStart >> 1) >> 1) >> 1);
+        uint8_t * sbuffer = arduboy->sBuffer;
+
+        //Pull wall byte, save location
+        #define _WALLREADBYTE() bofs = thisWallByte * WIDTH + x; texByte = sbuffer[bofs];
+        //Write previously read wall byte, go to next byte
+        #define _WALLWRITENEXT() sbuffer[bofs] = texByte; thisWallByte++;
+        //Work for setting bits of wall byte
+        #ifdef RCWHITEFOG
+        #define _WALLBITUNROLL(bm,nbm) if(!(shade & (bm)) || (texData & fastlshift16(texPos.getInteger()))) texByte |= (bm); else texByte &= (nbm); texPos += step;
+        #else
+        #define _WALLBITUNROLL(bm,nbm) if((shade & (bm)) && (texData & fastlshift16(texPos.getInteger()))) texByte |= (bm); else texByte &= (nbm); texPos += step;
+        #endif
+
+        _WALLREADBYTE();
+
+        #ifndef RCSMALLLOOPS
+
+        uint8_t startByte = thisWallByte; //The byte within which we start, always inclusive
+        uint8_t endByte = (((yEnd >> 1) >> 1) >> 1);  //The byte to end the unrolled loop on. Could be inclusive or exclusive
+
+        //First and last bytes are tricky
+        if(yStart & 7)
+        {
+            uint8_t endFirst = min((startByte + 1) * 8, yEnd);
+            uint8_t bm = fastlshift8(yStart & 7);
+
+            for (uint8_t i = yStart; i < endFirst; i++)
+            {
+                _WALLBITUNROLL(bm, (~bm));
+                bm <<= 1;
+            }
+
+            //Move to next, like it never happened
+            _WALLWRITENEXT();
+            _WALLREADBYTE();
+        }
+
+        //Now the unrolled loop
+        while(thisWallByte < endByte)
+        {
+            _WALLBITUNROLL(0b00000001, 0b11111110);
+            _WALLBITUNROLL(0b00000010, 0b11111101);
+            _WALLBITUNROLL(0b00000100, 0b11111011);
+            _WALLBITUNROLL(0b00001000, 0b11110111);
+            _WALLBITUNROLL(0b00010000, 0b11101111);
+            _WALLBITUNROLL(0b00100000, 0b11011111);
+            _WALLBITUNROLL(0b01000000, 0b10111111);
+            _WALLBITUNROLL(0b10000000, 0b01111111);
+            _WALLWRITENEXT();
+            _WALLREADBYTE();
+        }
+
+        //Last byte, but only need to do it if we don't simply span one byte
+        if((yEnd & 7) && startByte != endByte)
+        {
+            uint8_t endStart = thisWallByte * 8;
+            uint8_t bm = fastlshift8(endStart & 7);
+            for (uint8_t i = endStart; i < yEnd; i++)
+            {
+                _WALLBITUNROLL(bm, (~bm));
+                bm <<= 1;
+            }
+
+            //"Don't repeat yourself": that ship has sailed. Anyway, only write the last byte if we need to, otherwise
+            //we could legitimately write outside the bounds of the screen.
+            #ifndef RCNOCORNERSHADOWS
+            sbuffer[bofs] = texByte & ~(fastlshift8(yEnd & 7));
+            #else
+            sbuffer[bofs] = texByte;
+            #endif
+        }
+
+        #else // No loop unrolling
+
+        //Funny hack; code is written for loop unrolling first, so we have to kind of "fit in" to the macro system
+        if((yStart & 7) == 0) thisWallByte--;
+
+        do
+        {
+            uint8_t bidx = yStart & 7;
+
+            // Every new byte, save the current (previous) byte and load the new byte from the screen. 
+            // This might be wasteful, as only the first and last byte technically need to pull from the screen. 
+            if(bidx == 0) {
+                _WALLWRITENEXT();
+                _WALLREADBYTE();
+            }
+
+            uint8_t bm = fastlshift8(bidx);
+            _WALLBITUNROLL(bm, ~bm);
+        }
+        while(++yStart < yEnd);
+
+        //The above loop specifically can't end where bidx = 0 and thus placing us outside the writable area. 
+        //Note that corner shadows are SLIGHTLY different between loop unrolled and not: we MUST move yEnd up,
+        //but the previous does not, giving perhaps a better effect
+        #ifndef RCNOCORNERSHADOWS
+        sbuffer[bofs] = texByte & ~(fastlshift8((yEnd - 1) & 7));
+        #else
+        sbuffer[bofs] = texByte;
+        #endif
+
+        #endif
+
+        // ------- END CRITICAL SECTION -------------
+    }
+
 
     template<uint8_t InternalStateBytes>
     void drawSprites(RcPlayer * player, RcSpriteGroup<InternalStateBytes> * group, Arduboy2Base * arduboy)
@@ -452,128 +581,5 @@ public:
             tinyfont->print(spriteWidth);
             #endif
         }
-    }
-    //Draw a single raycast wall line. Will only draw specifically the wall line and will clip out all the rest
-    //(so you can predraw a ceiling and floor before calling raycast)
-    void drawWallLine(uint8_t x, uint16_t lineHeight, uint8_t shade, uint16_t texData, Arduboy2Base * arduboy)
-    {
-        // ------- BEGIN CRITICAL SECTION -------------
-        int16_t halfLine = lineHeight >> 1;
-        uint8_t yStart = max(0, MIDSCREENY - halfLine);
-        uint8_t yEnd = min(VIEWHEIGHT, MIDSCREENY + halfLine); //EXCLUSIVE
-
-        //Everyone prefers the high precision tiles (and for some reason, it's now faster? so confusing...)
-        UFixed<16,16> step = (float)RCTILESIZE / lineHeight;
-        UFixed<16,16> texPos = (yStart + halfLine - MIDSCREENY) * step;
-
-        //These four variables are needed as part of the loop unrolling system
-        uint16_t bofs;
-        uint8_t texByte;
-        uint8_t thisWallByte = (((yStart >> 1) >> 1) >> 1);
-        uint8_t * sbuffer = arduboy->sBuffer;
-
-        //Pull wall byte, save location
-        #define _WALLREADBYTE() bofs = thisWallByte * WIDTH + x; texByte = sbuffer[bofs];
-        //Write previously read wall byte, go to next byte
-        #define _WALLWRITENEXT() sbuffer[bofs] = texByte; thisWallByte++;
-        //Work for setting bits of wall byte
-        #ifdef RCWHITEFOG
-        #define _WALLBITUNROLL(bm,nbm) if(!(shade & (bm)) || (texData & fastlshift16(texPos.getInteger()))) texByte |= (bm); else texByte &= (nbm); texPos += step;
-        #else
-        #define _WALLBITUNROLL(bm,nbm) if((shade & (bm)) && (texData & fastlshift16(texPos.getInteger()))) texByte |= (bm); else texByte &= (nbm); texPos += step;
-        #endif
-
-        _WALLREADBYTE();
-
-        #ifndef RCSMALLLOOPS
-
-        uint8_t startByte = thisWallByte; //The byte within which we start, always inclusive
-        uint8_t endByte = (((yEnd >> 1) >> 1) >> 1);  //The byte to end the unrolled loop on. Could be inclusive or exclusive
-
-        //First and last bytes are tricky
-        if(yStart & 7)
-        {
-            uint8_t endFirst = min((startByte + 1) * 8, yEnd);
-            uint8_t bm = fastlshift8(yStart & 7);
-
-            for (uint8_t i = yStart; i < endFirst; i++)
-            {
-                _WALLBITUNROLL(bm, (~bm));
-                bm <<= 1;
-            }
-
-            //Move to next, like it never happened
-            _WALLWRITENEXT();
-            _WALLREADBYTE();
-        }
-
-        //Now the unrolled loop
-        while(thisWallByte < endByte)
-        {
-            _WALLBITUNROLL(0b00000001, 0b11111110);
-            _WALLBITUNROLL(0b00000010, 0b11111101);
-            _WALLBITUNROLL(0b00000100, 0b11111011);
-            _WALLBITUNROLL(0b00001000, 0b11110111);
-            _WALLBITUNROLL(0b00010000, 0b11101111);
-            _WALLBITUNROLL(0b00100000, 0b11011111);
-            _WALLBITUNROLL(0b01000000, 0b10111111);
-            _WALLBITUNROLL(0b10000000, 0b01111111);
-            _WALLWRITENEXT();
-            _WALLREADBYTE();
-        }
-
-        //Last byte, but only need to do it if we don't simply span one byte
-        if((yEnd & 7) && startByte != endByte)
-        {
-            uint8_t endStart = thisWallByte * 8;
-            uint8_t bm = fastlshift8(endStart & 7);
-            for (uint8_t i = endStart; i < yEnd; i++)
-            {
-                _WALLBITUNROLL(bm, (~bm));
-                bm <<= 1;
-            }
-
-            //"Don't repeat yourself": that ship has sailed. Anyway, only write the last byte if we need to, otherwise
-            //we could legitimately write outside the bounds of the screen.
-            #ifndef RCNOCORNERSHADOWS
-            sbuffer[bofs] = texByte & ~(fastlshift8(yEnd & 7));
-            #else
-            sbuffer[bofs] = texByte;
-            #endif
-        }
-
-        #else // No loop unrolling
-
-        //Funny hack; code is written for loop unrolling first, so we have to kind of "fit in" to the macro system
-        if((yStart & 7) == 0) thisWallByte--;
-
-        do
-        {
-            uint8_t bidx = yStart & 7;
-
-            // Every new byte, save the current (previous) byte and load the new byte from the screen. 
-            // This might be wasteful, as only the first and last byte technically need to pull from the screen. 
-            if(bidx == 0) {
-                _WALLWRITENEXT();
-                _WALLREADBYTE();
-            }
-
-            uint8_t bm = fastlshift8(bidx);
-            _WALLBITUNROLL(bm, ~bm);
-        }
-        while(++yStart < yEnd);
-
-        //The above loop specifically can't end where bidx = 0 and thus placing us outside the writable area. 
-        //Note that corner shadows are SLIGHTLY different between loop unrolled and not: we MUST move yEnd up,
-        //but the previous does not, giving perhaps a better effect
-        #ifndef RCNOCORNERSHADOWS
-        sbuffer[bofs] = texByte & ~(fastlshift8((yEnd - 1) & 7));
-        #else
-        sbuffer[bofs] = texByte;
-        #endif
-
-        #endif
-
-        // ------- END CRITICAL SECTION -------------
     }
 };
