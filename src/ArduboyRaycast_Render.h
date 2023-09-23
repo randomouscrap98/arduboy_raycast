@@ -40,8 +40,8 @@ constexpr uint8_t RCTILESIZE = 16;
 // don't want to do per-frame
 struct RcSpriteDrawPrecalc
 {
-    float fposX, fposY;
-    //float planeX, planeY;
+    float fposX;
+    float fposY;
     float invDet;
 };
 
@@ -273,12 +273,12 @@ public:
     //(so you can predraw a ceiling and floor before calling raycast)
     void drawWallLine(uint8_t x, uflot distance, uint8_t shade, uint16_t texData, Arduboy2Base * arduboy)
     {
+        // ------- BEGIN CRITICAL SECTION -------------
         float invLineHeight = INVHEIGHT * (float)distance; 
         UFixed<16,16> step = RCTILESIZE * invLineHeight;
 
         uint16_t lineHeight = (invLineHeight <= MINLDISTANCE) ? MAXLHEIGHT : (uint16_t)(1 / invLineHeight);
 
-        // ------- BEGIN CRITICAL SECTION -------------
         int16_t halfLine = lineHeight >> 1;
         uint8_t yStart = max(0, MIDSCREENY - halfLine);
         uint8_t yEnd = min(VIEWHEIGHT, MIDSCREENY + halfLine); //EXCLUSIVE
@@ -400,6 +400,7 @@ public:
         // ------- END CRITICAL SECTION -------------
     }
 
+
     //Precalculate some sprite drawing stuff, happens before any loop, not tied to a sprite
     RcSpriteDrawPrecalc precalcSpriteDraw(RcPlayer * player)
     {
@@ -407,9 +408,6 @@ public:
 
         result.fposX = (float)player->posX;
         result.fposY = (float)player->posY;
-        //result.planeX = player->dirY; 
-        //result.planeY = -player->dirX;
-        //result.invDet = 1.0 / (result.planeX * player->dirY - result.planeY * player->dirX); // required for correct matrix multiplication
         result.invDet = 1.0 / (player->dirY * player->dirY + player->dirX * player->dirX); // required for correct matrix multiplication
 
         return result;
@@ -420,12 +418,9 @@ public:
     {
         RcSpriteDrawData result;
 
-        // Already stored pos relative to camera earlier, but want extra precision, use floats
         float spriteX = (float)sprite->x - calc->fposX;
         float spriteY = (float)sprite->y - calc->fposY;
 
-        // X and Y will always be very small (map only 4 bit size), so these transforms will still fit within a 7 bit int part
-        //float transformYT = calc->invDet * (-calc->planeY * spriteX + calc->planeX * spriteY); // this is actually the depth inside the screen, that what Z is in 3D
         float transformYT = calc->invDet * (player->dirX * spriteX + player->dirY * spriteY); // this is actually the depth inside the screen, that what Z is in 3D
 
         // Nice quick shortcut to get out for sprites behind us (and ones that are too close)
@@ -452,7 +447,7 @@ public:
         if (ssXe < 0 || ssX > VIEWWIDTH)
             return result;
 
-        // Calculate vMove from top 5 bits of state
+        // Calculate vertical shift from top 5 bits of state
         uint8_t yShiftBits = ((sprite->state >> 1) >> 1) >> 1;
         int16_t yShift = yShiftBits ? int16_t((yShiftBits & 16 ? -(yShiftBits & 15) : (yShiftBits & 15)) * 2.0 / transformYT) : 0;
         // The above didn't work without float math, didn't feel like figuring out the ridiculous type casting
@@ -498,14 +493,15 @@ public:
         return result;
     }
 
+
     template<uint8_t InternalStateBytes>
     void drawSprites(RcPlayer * player, RcSpriteGroup<InternalStateBytes> * group, Arduboy2Base * arduboy)
     {
         uint8_t usedSprites = group->sortSprites(player->posX, player->posY);
 
+        // Buffers, we pull them out like this just to make it a little easier (might remove later)
         const uint8_t * spritesheet = this->spritesheet;
         const uint8_t * spritesheet_Mask = this->spritesheet_mask;
-
         uint8_t * sbuffer = arduboy->sBuffer;
         uflot * distCache = this->_distCache;
 
@@ -527,24 +523,25 @@ public:
             uflot texY = drawData.texYInit;
             uint8_t fr = sprite->frame;
 
-            uint8_t x = drawData.drawStartX;
             uint8_t drawStartByte = (((drawData.drawStartY >> 1) >> 1) >> 1); //right shift 3 without loop
             uint8_t drawEndByte = (((drawData.drawEndY >> 1) >> 1) >> 1);  //The byte to end the unrolled loop on. Could be inclusive or exclusive
             uint16_t texData = 0;
             uint16_t texMask = 0;
             uint8_t lastTx = 255;
 
+            uint8_t x = drawData.drawStartX;
+
             // ------- BEGIN CRITICAL SECTION -------------
             do //For every strip (x)
             {
-                //If the sprite is hidden, most processing disappears
+                //If the sprite is hidden, skip this line. Lots of calculations bypassed!
                 if (drawData.transformY < distCache[x >> 1])
                 {
                     uint8_t tx = texX.getInteger();
 
                     texY = drawData.texYInit;
 
-                    //These five variables are needed as part of the loop unrolling system
+                    //These five variables (including texData+texMask) are needed as part of the loop unrolling system
                     uint16_t bofs;
                     uint8_t texByte;
                     uint8_t thisWallByte = drawStartByte;
