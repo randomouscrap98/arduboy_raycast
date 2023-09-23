@@ -9,18 +9,23 @@
 #include "ArduboyRaycast_SpriteGroup.h"
 #include "ArduboyRaycast_Shading.h"
 
-// Unless you ask for custom flags, raycaster just sets some sane defaults
-#ifndef RCCUSTOMFLAGS
-// Visualization flags (barely impacts performance) 
-#define CORNERSHADOWS       // Shadows at the bottom of walls help differentiate walls from floor
-#define WALLSHADING 1       // Unset = no wall shading, 1 = shading, 2 = half resolution shading. "LIGHTINTENSITY" still affects draw distance regardless
-#define ALTWALLSHADING      // Make perpendicular walls half-shaded to increase readability
-//#define WHITEFOG            // Make distance shading white instead of black
-// Optimization flags (greatly impacts performance... I think?) 
-#define CRITICALLOOPUNROLLING   // This adds a large (~1.5kb) amount of code but significantly increases performance, especially sprites
+// Available flags for compilation
+// #define RCNOCORNERSHADOWS      // Remove the corner shadows (used to increase readability of walls against floor)
+// #define RCWHITEFOG             // Make distance shading white instead of black
+// #define RCNOALTWALLSHADING     // Perpendicular walls are half-shaded to increase readability, this removes that
+// #define RCSMALLLOOPS           // The raycaster makes use of loop unrolling, which adds about 1.5kb code. This removes that but performance severely drops
+
 // Debug flags 
-// #define LINEHEIGHTDEBUG      // Display information about lineheight (only draws a few lines)
-// #define PRINTSPRITEDATA      // Display information about certain sprite-related properties
+// #define RCGENERALDEBUG       // Must be set for any of the othere to work
+// #define RCLINEHEIGHTDEBUG      // Display information about lineheight (only draws a few lines)
+// #define RCPRINTSPRITEDATA      // Display information about certain sprite-related properties
+
+#ifndef RCWALLSHADING
+#define RCWALLSHADING 1           // 0 = no wall shading, 1 = shading, 2 = half resolution shading. "LIGHTINTENSITY" still affects draw distance regardless
+#endif
+
+#ifdef RCGENERALDEBUG
+#include <Tinyfont.h>
 #endif
 
 // -------------- CALCULATED / ASSUMED CONSTANTS, TRY NOT TO TOUCH ------------------------
@@ -31,7 +36,7 @@ constexpr uint8_t RCTILESIZE = 16;
 // ------------------------------------------------------------------------------
 
 
-// A container to hold raycasting state. 
+// Raycast renderer container, tracks data used for raycasting + lets you render raycasting
 template<uint8_t W, uint8_t H>
 class RcRender
 {
@@ -58,6 +63,10 @@ public:
     uflot _viewdistance = 4.0;      // Calculated value
     uflot _darkness = 1.0;          // Calculated value
     uflot _distCache[VIEWWIDTH / 2]; // Half distance resolution means sprites will clip 1 pixel into walls sometimes but otherwise...
+
+    #ifdef RCGENERALDEBUG
+    Tinyfont * tinyfont;
+    #endif
 
     // Clear the area represented by this raycaster
     inline void clearRaycast(Arduboy2Base * arduboy)
@@ -180,22 +189,21 @@ public:
             {
                 distCache[x >> 1] = perpWallDist;
 
-                #if WALLSHADING == 2
+                #if RCWALLSHADING == 2
                 //Since we're in here anyway, do the half-res shading too (if requested)
                 shade = calcShading(perpWallDist, x, darkness);
                 #endif
             }
 
-            #if WALLSHADING == 1
+            #if RCWALLSHADING == 1
             //Full res shading happens every frame of course
             shade = calcShading(perpWallDist, x, darkness);
-            #endif
-            #ifndef WALLSHADING
+            #elif RCWALLSHADING == 0
             //If you're not having any wall shading, it's always fully set
             shade = 0xFF;
             #endif
 
-            #ifdef ALTWALLSHADING
+            #ifndef RCNOALTWALLSHADING
             //Every other row of alt walls get no shading to make them easier to read
             if(side & x) shade = 0;
             #endif
@@ -221,7 +229,7 @@ public:
             // We can truncate the total height if too close to the wall right here and now and avoid future checks.
             uint16_t lineHeight = (perpWallDist <= MINLDISTANCE) ? MAXLHEIGHT : (VIEWHEIGHT / (float)perpWallDist);
 
-            #ifdef LINEHEIGHTDEBUG
+            #ifdef RCLINEHEIGHTDEBUG
             tinyfont.setCursor(16, x * 16);
             tinyfont.println(lineHeight);
             tinyfont.setCursor(16, x * 16 + 8);
@@ -252,12 +260,12 @@ public:
         // since we're looping against the sorted array.
         for (uint8_t i = 0; i < usedSprites; i++)
         {
-            //Get the current sprite. Copy so we don't have to derefence a pointer a million times
-            RcSprite<InternalStateBytes> sprite = * group->sortedSprites[i].sprite;
+            //Get the current sprite so we don't have to dereference multiple pointers
+            RcSprite<InternalStateBytes> * sprite = group->sortedSprites[i].sprite;
 
             //Already stored pos relative to camera earlier, but want extra precision, use floats
-            float spriteX = (float)sprite.x - fposX;
-            float spriteY = (float)sprite.y - fposY;
+            float spriteX = (float)sprite->x - fposX;
+            float spriteY = (float)sprite->y - fposY;
 
             // X and Y will always be very small (map only 4 bit size), so these transforms will still fit within a 7 bit int part
             float transformYT = invDet * (-planeY * spriteX + planeX * spriteY); // this is actually the depth inside the screen, that what Z is in 3D
@@ -273,7 +281,7 @@ public:
 
             // calculate the dimensions of the sprite on screen. All sprites are square. Size mods go here
             // using 'transformY' instead of the real distance prevents fisheye
-            uint16_t spriteHeight = uint16_t(VIEWHEIGHT / transformYT * (float)this->spritescaling[(sprite.state & RSSTATESIZE) >> 1]);
+            uint16_t spriteHeight = uint16_t(VIEWHEIGHT / transformYT * (float)this->spritescaling[(sprite->state & RSSTATESIZE) >> 1]);
             uint16_t spriteWidth = spriteHeight; 
 
             // calculate lowest and highest pixel to fill. Sprite screen/start X and Sprite screen/start Y
@@ -285,8 +293,8 @@ public:
             if(ssXe < 0 || ssX > VIEWWIDTH) continue;
 
             //Calculate vMove from top 5 bits of state
-            uint8_t yShiftBits = ((sprite.state >> 1) >> 1) >> 1;
-            int8_t yShift = yShiftBits ? int8_t((yShiftBits & 16 ? -(yShiftBits & 15): (yShiftBits & 15)) * 2.0 / transformYT) : 0;
+            uint8_t yShiftBits = ((sprite->state >> 1) >> 1) >> 1;
+            int16_t yShift = yShiftBits ? int16_t((yShiftBits & 16 ? -(yShiftBits & 15): (yShiftBits & 15)) * 2.0 / transformYT) : 0;
             //The above didn't work without float math, didn't feel like figuring out the ridiculous type casting
 
             int16_t ssY = -(spriteHeight >> 1) + MIDSCREENY + yShift;
@@ -302,14 +310,16 @@ public:
             //Setup stepping to avoid costly mult (and div) in critical loops
             //These float divisions happen just once per sprite, hopefully that's not too bad.
             //There used to be an option to set the precision of sprites but it didn't seem to make any difference
-            uflot stepX = (float)RCTILESIZE / spriteWidth;
-            uflot stepY = (float)RCTILESIZE / spriteHeight;
-            uflot texX = (drawStartX - ssX) * stepX;
-            uflot texYInit = (drawStartY - ssY) * stepY;
+            float stepXf = (float)RCTILESIZE / spriteWidth;
+            float stepYf = (float)RCTILESIZE / spriteHeight;
+            uflot texX = (drawStartX - ssX) * stepXf; //This unfortunately needs float because of precision glitches
+            uflot texYInit = (drawStartY - ssY) * stepYf;
+            uflot stepX = stepXf;
+            uflot stepY = stepYf;
             uflot texY = texYInit;
 
             uflot transformY = (uflot)transformYT; //Need this as uflot for critical loop
-            uint8_t fr = sprite.frame;
+            uint8_t fr = sprite->frame;
             uint8_t x = drawStartX;
 
             // ------- BEGIN CRITICAL SECTION -------------
@@ -338,7 +348,7 @@ public:
 
                     _SPRITEREADSCRBYTE();
 
-                    #ifdef CRITICALLOOPUNROLLING
+                    #ifndef RCSMALLLOOPS
 
                     uint8_t startByte = thisWallByte; //The byte within which we start, always inclusive
                     uint8_t endByte = (((drawEndY >> 1) >> 1) >> 1);  //The byte to end the unrolled loop on. Could be inclusive or exclusive
@@ -347,11 +357,12 @@ public:
                     if(drawStartY & 7)
                     {
                         uint8_t endFirst = min((startByte + 1) * 8, drawEndY);
+                        uint8_t bm = fastlshift8(drawStartY & 7);
 
                         for (uint8_t i = drawStartY; i < endFirst; i++)
                         {
-                            uint8_t bm = fastlshift8(i & 7);
                             _SPRITEBITUNROLL(bm, (~bm));
+                            bm <<= 1;
                         }
 
                         //Move to next, like it never happened
@@ -377,10 +388,12 @@ public:
                     //Last byte, but only need to do it if we end in the middle of a byte and don't simply span one byte
                     if((drawEndY & 7) && startByte != endByte)
                     {
-                        for (uint8_t i = thisWallByte * 8; i < drawEndY; i++)
+                        uint8_t endStart = thisWallByte * 8;
+                        uint8_t bm = fastlshift8(endStart & 7);
+                        for (uint8_t i = endStart; i < drawEndY; i++)
                         {
-                            uint8_t bm = fastlshift8(i & 7);
                             _SPRITEBITUNROLL(bm, (~bm));
+                            bm <<= 1;
                         }
 
                         //Only need to set the last byte if we're drawing in it of course
@@ -424,21 +437,20 @@ public:
             while(++x < drawEndX); //EXCLUSIVE
             // ------- END CRITICAL SECTION -------------
 
-            #ifdef PRINTSPRITEDATA
+            #ifdef RCPRINTSPRITEDATA
             //Clear a section for us to use
             constexpr uint8_t sdh = 10;
-            arduboy.fillRect(0, HEIGHT - sdh, VIEWWIDTH, sdh, BLACK);
+            arduboy->fillRect(0, HEIGHT - sdh, VIEWWIDTH, sdh, BLACK);
             //Print some junk
-            tinyfont.setCursor(0, HEIGHT - sdh);
-            tinyfont.print((float)transformXT, 4);
-            tinyfont.print(" X");
-            tinyfont.print(ssX);
-            tinyfont.setCursor(0, HEIGHT - sdh + 5);
-            tinyfont.print((float)transformYT, 4);
-            tinyfont.print(" W");
-            tinyfont.print(spriteWidth);
+            tinyfont->setCursor(0, HEIGHT - sdh);
+            tinyfont->print((float)transformXT, 4);
+            tinyfont->print(" Y");
+            tinyfont->print(ssY);
+            tinyfont->setCursor(0, HEIGHT - sdh + 5);
+            tinyfont->print((float)transformYT, 4);
+            tinyfont->print(" W");
+            tinyfont->print(spriteWidth);
             #endif
-
         }
     }
     //Draw a single raycast wall line. Will only draw specifically the wall line and will clip out all the rest
@@ -465,7 +477,7 @@ public:
         //Write previously read wall byte, go to next byte
         #define _WALLWRITENEXT() sbuffer[bofs] = texByte; thisWallByte++;
         //Work for setting bits of wall byte
-        #ifdef WHITEFOG
+        #ifdef RCWHITEFOG
         #define _WALLBITUNROLL(bm,nbm) if(!(shade & (bm)) || (texData & fastlshift16(texPos.getInteger()))) texByte |= (bm); else texByte &= (nbm); texPos += step;
         #else
         #define _WALLBITUNROLL(bm,nbm) if((shade & (bm)) && (texData & fastlshift16(texPos.getInteger()))) texByte |= (bm); else texByte &= (nbm); texPos += step;
@@ -473,7 +485,7 @@ public:
 
         _WALLREADBYTE();
 
-        #ifdef CRITICALLOOPUNROLLING
+        #ifndef RCSMALLLOOPS
 
         uint8_t startByte = thisWallByte; //The byte within which we start, always inclusive
         uint8_t endByte = (((yEnd >> 1) >> 1) >> 1);  //The byte to end the unrolled loop on. Could be inclusive or exclusive
@@ -482,11 +494,12 @@ public:
         if(yStart & 7)
         {
             uint8_t endFirst = min((startByte + 1) * 8, yEnd);
+            uint8_t bm = fastlshift8(yStart & 7);
 
             for (uint8_t i = yStart; i < endFirst; i++)
             {
-                uint8_t bm = fastlshift8(i & 7);
                 _WALLBITUNROLL(bm, (~bm));
+                bm <<= 1;
             }
 
             //Move to next, like it never happened
@@ -512,15 +525,17 @@ public:
         //Last byte, but only need to do it if we don't simply span one byte
         if((yEnd & 7) && startByte != endByte)
         {
-            for (uint8_t i = thisWallByte * 8; i < yEnd; i++)
+            uint8_t endStart = thisWallByte * 8;
+            uint8_t bm = fastlshift8(endStart & 7);
+            for (uint8_t i = endStart; i < yEnd; i++)
             {
-                uint8_t bm = fastlshift8(i & 7);
                 _WALLBITUNROLL(bm, (~bm));
+                bm <<= 1;
             }
 
             //"Don't repeat yourself": that ship has sailed. Anyway, only write the last byte if we need to, otherwise
             //we could legitimately write outside the bounds of the screen.
-            #ifdef CORNERSHADOWS
+            #ifndef RCNOCORNERSHADOWS
             sbuffer[bofs] = texByte & ~(fastlshift8(yEnd & 7));
             #else
             sbuffer[bofs] = texByte;
@@ -551,7 +566,7 @@ public:
         //The above loop specifically can't end where bidx = 0 and thus placing us outside the writable area. 
         //Note that corner shadows are SLIGHTLY different between loop unrolled and not: we MUST move yEnd up,
         //but the previous does not, giving perhaps a better effect
-        #ifdef CORNERSHADOWS
+        #ifndef RCNOCORNERSHADOWS
         sbuffer[bofs] = texByte & ~(fastlshift8((yEnd - 1) & 7));
         #else
         sbuffer[bofs] = texByte;
