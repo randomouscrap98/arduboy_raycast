@@ -47,9 +47,9 @@ constexpr uint8_t mymap[RCMAXMAPDIMENSION * RCMAXMAPDIMENSION] PROGMEM = {
 // A function which determines if a cell is solid. This is up to you: you may have
 // your own scheme for whether a block is solid or not. Luckily in our case, any
 // nonzero block is solid
-bool isSolid(uint8_t x, uint8_t y)
+bool isSolid(uflot x, uflot y)
 {
-    return raycast.worldMap.getCell(x, y) != 0;
+    return raycast.worldMap.getCell(x.getInteger(), y.getInteger()) != 0;
 }
 
 // You have to write this yourself but I provide a helper function which automatically does 

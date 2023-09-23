@@ -84,6 +84,8 @@ public:
         return usedSprites;
     }
 
+    // Attempt to add a sprite to the sprite list. Activates the sprite immediately and fills out some of the more 
+    // complicated fields.
     RcSprite<InternalStateBytes> * addSprite(float x, float y, uint8_t frame, uint8_t shrinkLevel, int8_t heightAdjust, void (* func)(RcSprite<InternalStateBytes> *,Arduboy2Base*))
     {
         uint8_t numsprites = this->numsprites;
@@ -95,13 +97,44 @@ public:
                 sprite->x = muflot(x);
                 sprite->y = muflot(y);
                 sprite->frame = frame;
-                sprite->state = 1 | ((shrinkLevel << 1) & RSSTATESHRINK) | (heightAdjust < 0 ? 16 : 0) | ((abs(heightAdjust) << 3) & RSTATEYOFFSET);
+                sprite->state = RSSTATEACTIVE | ((shrinkLevel << 1) & RSSTATESHRINK) | (heightAdjust < 0 ? 16 : 0) | ((abs(heightAdjust) << 3) & RSTATEYOFFSET);
                 sprite->behavior = func;
                 return sprite;
             }
         }
 
         return NULL;
+    }
+
+    // Attempt to add a bounds to the bounds list.
+    RcBounds * addBounds(float x1, float y1, float x2, float y2)
+    {
+        uint8_t numbounds = this->numbounds;
+        for(uint8_t i = 0; i < numbounds; i++)
+        {
+            RcBounds * bounds = &this->bounds[i];
+            if(!ISSPRITEACTIVE((*bounds)))
+            {
+                bounds->x1 = muflot(x1);
+                bounds->x2 = muflot(x2);
+                bounds->y1 = muflot(y1);
+                bounds->y2 = muflot(y2);
+                bounds->state = RSSTATEACTIVE;
+            }
+        }
+
+        return NULL;
+    }
+
+    // Add a bounds for the given sprite to the bounds array. Since sprites are billboards and 
+    // always rotate to face the player, this shortcut function only allows you to give one dimension
+    // of a square box surrounding said sprite. The bounding box will NOT move with the sprite, that's
+    // up to you. You can add extra data to sprites to store the pointer to the bounding box (2 bytes)
+    // and thus have a link between the two.
+    RcBounds * addSpriteBounds(RcSprite<InternalStateBytes> * sprite, float size)
+    {
+        float halfsize = size / 2;
+        return this->addBounds(sprite->x - halfsize, sprite->y - halfsize, sprite->x + halfsize, sprite->y + halfsize);
     }
 
     //Get the first bounding box (in order of ID) which intersects this point

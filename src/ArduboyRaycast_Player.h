@@ -18,7 +18,7 @@ public:
     }
 
     //Attempt to move the player the given delta movement and rotation, using the given solidity checker for position
-    void tryMovement(float movement, float rotation, bool (* solidChecker)(uint8_t,uint8_t))
+    void tryMovement(float movement, float rotation, bool (* solidChecker)(uflot,uflot))
     {
         if(movement)
         {
@@ -27,9 +27,9 @@ public:
             uflot newPosX = posX + this->dirX * movement;
             uflot newPosY = posY + this->dirY * movement;
 
-            if (solidChecker(newPosX.getInteger(), posY.getInteger()))
+            if (solidChecker(newPosX, posY))
                 newPosX = posX;
-            if (solidChecker(posX.getInteger(), newPosY.getInteger()))
+            if (solidChecker(posX, newPosY))
                 newPosY = posY;
 
             this->posX = newPosX;
