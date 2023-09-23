@@ -36,6 +36,34 @@ constexpr uint8_t RCTILESIZE = 16;
 // ------------------------------------------------------------------------------
 
 
+// A container for precalculated sprite information. These are calculations we
+// don't want to do per-frame
+struct RcSpriteDrawPrecalc
+{
+    float fposX, fposY;
+    //float planeX, planeY;
+    float invDet;
+};
+
+
+// A container for calculated sprite draw data. You know a calculation was not performed
+// if stepX and stepY are 0
+struct RcSpriteDrawData
+{
+    uint8_t drawStartX;
+    uint8_t drawStartY;
+    uint8_t drawEndY;
+    uint8_t drawEndX;
+
+    uflot texXInit;
+    uflot texYInit;
+    uflot stepX = 0;
+    uflot stepY = 0;
+
+    uflot transformY;
+};
+
+
 // Raycast renderer container, tracks data used for raycasting + lets you render raycasting
 template<uint8_t W, uint8_t H>
 class RcRender
@@ -339,6 +367,7 @@ public:
 
         //Funny hack; code is written for loop unrolling first, so we have to kind of "fit in" to the macro system
         if((yStart & 7) == 0) thisWallByte--;
+        uint8_t bm = fastlshift8(yStart & 7);
 
         do
         {
@@ -347,12 +376,13 @@ public:
             // Every new byte, save the current (previous) byte and load the new byte from the screen. 
             // This might be wasteful, as only the first and last byte technically need to pull from the screen. 
             if(bidx == 0) {
+                bm = 1;
                 _WALLWRITENEXT();
                 _WALLREADBYTE();
             }
 
-            uint8_t bm = fastlshift8(bidx);
             _WALLBITUNROLL(bm, ~bm);
+            bm <<= 1;
         }
         while(++yStart < yEnd);
 
@@ -370,6 +400,103 @@ public:
         // ------- END CRITICAL SECTION -------------
     }
 
+    //Precalculate some sprite drawing stuff, happens before any loop, not tied to a sprite
+    RcSpriteDrawPrecalc precalcSpriteDraw(RcPlayer * player)
+    {
+        RcSpriteDrawPrecalc result;
+
+        result.fposX = (float)player->posX;
+        result.fposY = (float)player->posY;
+        //result.planeX = player->dirY; 
+        //result.planeY = -player->dirX;
+        //result.invDet = 1.0 / (result.planeX * player->dirY - result.planeY * player->dirX); // required for correct matrix multiplication
+        result.invDet = 1.0 / (player->dirY * player->dirY + player->dirX * player->dirX); // required for correct matrix multiplication
+
+        return result;
+    }
+
+    template<uint8_t InternalStateBytes>
+    RcSpriteDrawData calcSpriteDraw(RcSpriteDrawPrecalc * calc, RcPlayer * player, RcSprite<InternalStateBytes> * sprite)
+    {
+        RcSpriteDrawData result;
+
+        // Already stored pos relative to camera earlier, but want extra precision, use floats
+        float spriteX = (float)sprite->x - calc->fposX;
+        float spriteY = (float)sprite->y - calc->fposY;
+
+        // X and Y will always be very small (map only 4 bit size), so these transforms will still fit within a 7 bit int part
+        //float transformYT = calc->invDet * (-calc->planeY * spriteX + calc->planeX * spriteY); // this is actually the depth inside the screen, that what Z is in 3D
+        float transformYT = calc->invDet * (player->dirX * spriteX + player->dirY * spriteY); // this is actually the depth inside the screen, that what Z is in 3D
+
+        // Nice quick shortcut to get out for sprites behind us (and ones that are too close)
+        if (transformYT < MINSPRITEDISTANCE)
+            return result;
+
+        float transformXT = calc->invDet * (player->dirY * spriteX - player->dirX * spriteY);
+
+        // int16 because easy overflow! if x is much larger than y, then you're effectively multiplying 50 by map width.
+        //  NOTE: this is the CENTER of the sprite, not the edge (thankfully)
+        int16_t spriteScreenX = int16_t(MIDSCREENX * (1 + transformXT / transformYT));
+
+        // calculate the dimensions of the sprite on screen. All sprites are square. Size mods go here
+        // using 'transformY' instead of the real distance prevents fisheye
+        uint16_t spriteHeight = uint16_t(VIEWHEIGHT / transformYT * (float)this->spritescaling[(sprite->state & RSSTATESIZE) >> 1]);
+        uint16_t spriteWidth = spriteHeight;
+
+        // calculate lowest and highest pixel to fill. Sprite screen/start X and Sprite screen/start Y
+        // Because we have 1 fewer bit to store things, we unfortunately need an int16
+        int16_t ssX = -(spriteWidth >> 1) + spriteScreenX; // Offsets go here, but modified by distance or something?
+        int16_t ssXe = ssX + spriteWidth;                  // EXCLUSIVE
+
+        // Get out if sprite is completely outside view
+        if (ssXe < 0 || ssX > VIEWWIDTH)
+            return result;
+
+        // Calculate vMove from top 5 bits of state
+        uint8_t yShiftBits = ((sprite->state >> 1) >> 1) >> 1;
+        int16_t yShift = yShiftBits ? int16_t((yShiftBits & 16 ? -(yShiftBits & 15) : (yShiftBits & 15)) * 2.0 / transformYT) : 0;
+        // The above didn't work without float math, didn't feel like figuring out the ridiculous type casting
+
+        int16_t ssY = -(spriteHeight >> 1) + MIDSCREENY + yShift;
+        int16_t ssYe = ssY + spriteHeight; // EXCLUSIVE
+
+        if (ssYe < 0 || ssY > VIEWHEIGHT)
+            return result;
+
+        result.drawStartY = ssY < 0 ? 0 : ssY; // Because of these checks, we can store them in 1 byte stuctures
+        result.drawEndY = ssYe > VIEWHEIGHT ? VIEWHEIGHT : ssYe;
+        result.drawStartX = ssX < 0 ? 0 : ssX;
+        result.drawEndX = ssXe > VIEWWIDTH ? VIEWWIDTH : ssXe;
+
+        // Setup stepping to avoid costly mult (and div) in critical loops
+        // These float divisions happen just once per sprite, hopefully that's not too bad.
+        // There used to be an option to set the precision of sprites but it didn't seem to make any difference
+        float stepXf = (float)RCTILESIZE / spriteWidth;
+        float stepYf = (float)RCTILESIZE / spriteHeight;
+
+        result.texXInit = (result.drawStartX - ssX) * stepXf; // This unfortunately needs float because of precision glitches
+        result.texYInit = (result.drawStartY - ssY) * stepYf;
+        result.stepX = stepXf;
+        result.stepY = stepYf;
+        result.transformY = (uflot)transformYT;
+
+        #ifdef RCPRINTSPRITEDATA
+        //Clear a section for us to use
+        constexpr uint8_t sdh = 10;
+        arduboy->fillRect(0, HEIGHT - sdh, VIEWWIDTH, sdh, BLACK);
+        //Print some junk
+        tinyfont->setCursor(0, HEIGHT - sdh);
+        tinyfont->print((float)transformXT, 4);
+        tinyfont->print(" Y");
+        tinyfont->print(ssY);
+        tinyfont->setCursor(0, HEIGHT - sdh + 5);
+        tinyfont->print((float)transformYT, 4);
+        tinyfont->print(" W");
+        tinyfont->print(spriteWidth);
+        #endif
+
+        return result;
+    }
 
     template<uint8_t InternalStateBytes>
     void drawSprites(RcPlayer * player, RcSpriteGroup<InternalStateBytes> * group, Arduboy2Base * arduboy)
@@ -379,11 +506,10 @@ public:
         const uint8_t * spritesheet = this->spritesheet;
         const uint8_t * spritesheet_Mask = this->spritesheet_mask;
 
-        float fposX = (float)player->posX, fposY = (float)player->posY;
-        float planeX = player->dirY, planeY = -player->dirX;
-        float invDet = 1.0 / (planeX * player->dirY - planeY * player->dirX); // required for correct matrix multiplication
         uint8_t * sbuffer = arduboy->sBuffer;
         uflot * distCache = this->_distCache;
+
+        RcSpriteDrawPrecalc precalc = precalcSpriteDraw(player);
 
         // after sorting the sprites, do the projection and draw them. We know all sprites in the array are active,
         // since we're looping against the sorted array.
@@ -392,103 +518,61 @@ public:
             //Get the current sprite so we don't have to dereference multiple pointers
             RcSprite<InternalStateBytes> * sprite = group->sortedSprites[i].sprite;
 
-            //Already stored pos relative to camera earlier, but want extra precision, use floats
-            float spriteX = (float)sprite->x - fposX;
-            float spriteY = (float)sprite->y - fposY;
+            RcSpriteDrawData drawData = calcSpriteDraw(&precalc, player, sprite);
 
-            // X and Y will always be very small (map only 4 bit size), so these transforms will still fit within a 7 bit int part
-            float transformYT = invDet * (-planeY * spriteX + planeX * spriteY); // this is actually the depth inside the screen, that what Z is in 3D
+            // Skip drawing, it was determined nothing was needed
+            if(drawData.stepX == 0 && drawData.stepY == 0) continue;
 
-            // Nice quick shortcut to get out for sprites behind us (and ones that are too close)
-            if(transformYT < MINSPRITEDISTANCE) continue;
-
-            float transformXT = invDet * (player->dirY * spriteX - player->dirX * spriteY);
-
-            //int16 because easy overflow! if x is much larger than y, then you're effectively multiplying 50 by map width.
-            // NOTE: this is the CENTER of the sprite, not the edge (thankfully)
-            int16_t spriteScreenX = int16_t(MIDSCREENX * (1 + transformXT / transformYT));
-
-            // calculate the dimensions of the sprite on screen. All sprites are square. Size mods go here
-            // using 'transformY' instead of the real distance prevents fisheye
-            uint16_t spriteHeight = uint16_t(VIEWHEIGHT / transformYT * (float)this->spritescaling[(sprite->state & RSSTATESIZE) >> 1]);
-            uint16_t spriteWidth = spriteHeight; 
-
-            // calculate lowest and highest pixel to fill. Sprite screen/start X and Sprite screen/start Y
-            // Because we have 1 fewer bit to store things, we unfortunately need an int16
-            int16_t ssX = -(spriteWidth >> 1) + spriteScreenX;   //Offsets go here, but modified by distance or something?
-            int16_t ssXe = ssX + spriteWidth; //EXCLUSIVE
-
-            // Get out if sprite is completely outside view
-            if(ssXe < 0 || ssX > VIEWWIDTH) continue;
-
-            //Calculate vMove from top 5 bits of state
-            uint8_t yShiftBits = ((sprite->state >> 1) >> 1) >> 1;
-            int16_t yShift = yShiftBits ? int16_t((yShiftBits & 16 ? -(yShiftBits & 15): (yShiftBits & 15)) * 2.0 / transformYT) : 0;
-            //The above didn't work without float math, didn't feel like figuring out the ridiculous type casting
-
-            int16_t ssY = -(spriteHeight >> 1) + MIDSCREENY + yShift;
-            int16_t ssYe = ssY + spriteHeight; //EXCLUSIVE
-
-            if(ssYe < 0 || ssY > VIEWHEIGHT) continue;
-
-            uint8_t drawStartY = ssY < 0 ? 0 : ssY; //Because of these checks, we can store them in 1 byte stuctures
-            uint8_t drawEndY = ssYe > VIEWHEIGHT ? VIEWHEIGHT : ssYe;
-            uint8_t drawStartX = ssX < 0 ? 0 : ssX;
-            uint8_t drawEndX = ssXe > VIEWWIDTH ? VIEWWIDTH : ssXe;
-
-            //Setup stepping to avoid costly mult (and div) in critical loops
-            //These float divisions happen just once per sprite, hopefully that's not too bad.
-            //There used to be an option to set the precision of sprites but it didn't seem to make any difference
-            float stepXf = (float)RCTILESIZE / spriteWidth;
-            float stepYf = (float)RCTILESIZE / spriteHeight;
-            uflot texX = (drawStartX - ssX) * stepXf; //This unfortunately needs float because of precision glitches
-            uflot texYInit = (drawStartY - ssY) * stepYf;
-            uflot stepX = stepXf;
-            uflot stepY = stepYf;
-            uflot texY = texYInit;
-
-            uflot transformY = (uflot)transformYT; //Need this as uflot for critical loop
+            uflot texX = drawData.texXInit;
+            uflot texY = drawData.texYInit;
             uint8_t fr = sprite->frame;
-            uint8_t x = drawStartX;
+
+            uint8_t x = drawData.drawStartX;
+            uint8_t drawStartByte = (((drawData.drawStartY >> 1) >> 1) >> 1); //right shift 3 without loop
+            uint8_t drawEndByte = (((drawData.drawEndY >> 1) >> 1) >> 1);  //The byte to end the unrolled loop on. Could be inclusive or exclusive
+            uint16_t texData = 0;
+            uint16_t texMask = 0;
+            uint8_t lastTx = 255;
 
             // ------- BEGIN CRITICAL SECTION -------------
             do //For every strip (x)
             {
                 //If the sprite is hidden, most processing disappears
-                if (transformY < distCache[x >> 1])
+                if (drawData.transformY < distCache[x >> 1])
                 {
                     uint8_t tx = texX.getInteger();
 
-                    texY = texYInit;
+                    texY = drawData.texYInit;
 
                     //These five variables are needed as part of the loop unrolling system
                     uint16_t bofs;
                     uint8_t texByte;
-                    uint16_t texData = readTextureStrip16(spritesheet, fr, tx);
-                    uint16_t texMask = readTextureStrip16(spritesheet_Mask, fr, tx);
-                    uint8_t thisWallByte = (((drawStartY >> 1) >> 1) >> 1); //right shift 3 without loop
+                    uint8_t thisWallByte = drawStartByte;
+                    if(lastTx != tx)
+                    {
+                        texData = readTextureStrip16(spritesheet, fr, tx);
+                        texMask = readTextureStrip16(spritesheet_Mask, fr, tx);
+                        lastTx = tx;
+                    }
 
                     //Pull screen byte, save location
                     #define _SPRITEREADSCRBYTE() bofs = thisWallByte * WIDTH + x; texByte = sbuffer[bofs];
                     //Write previously read screen byte, go to next byte
                     #define _SPRITEWRITESCRNEXT() sbuffer[bofs] = texByte; thisWallByte++;
                     //Work for setting bits of screen byte
-                    #define _SPRITEBITUNROLL(bm,nbm) { uint16_t btmask = fastlshift16(texY.getInteger()); if (texMask & btmask) { if (texData & btmask) texByte |= bm; else texByte &= nbm; } texY += stepY; }
+                    #define _SPRITEBITUNROLL(bm,nbm) { uint16_t btmask = fastlshift16(texY.getInteger()); if (texMask & btmask) { if (texData & btmask) texByte |= bm; else texByte &= nbm; } texY += drawData.stepY; }
 
                     _SPRITEREADSCRBYTE();
 
                     #ifndef RCSMALLLOOPS
 
-                    uint8_t startByte = thisWallByte; //The byte within which we start, always inclusive
-                    uint8_t endByte = (((drawEndY >> 1) >> 1) >> 1);  //The byte to end the unrolled loop on. Could be inclusive or exclusive
-
                     //First and last bytes are tricky
-                    if(drawStartY & 7)
+                    if(drawData.drawStartY & 7)
                     {
-                        uint8_t endFirst = min((startByte + 1) * 8, drawEndY);
-                        uint8_t bm = fastlshift8(drawStartY & 7);
+                        uint8_t endFirst = min((drawStartByte + 1) * 8, drawData.drawEndY);
+                        uint8_t bm = fastlshift8(drawData.drawStartY & 7);
 
-                        for (uint8_t i = drawStartY; i < endFirst; i++)
+                        for (uint8_t i = drawData.drawStartY; i < endFirst; i++)
                         {
                             _SPRITEBITUNROLL(bm, (~bm));
                             bm <<= 1;
@@ -500,7 +584,7 @@ public:
                     }
 
                     //Now the unrolled loop
-                    while(thisWallByte < endByte)
+                    while(thisWallByte < drawEndByte)
                     {
                         _SPRITEBITUNROLL(0b00000001, 0b11111110);
                         _SPRITEBITUNROLL(0b00000010, 0b11111101);
@@ -515,11 +599,11 @@ public:
                     }
 
                     //Last byte, but only need to do it if we end in the middle of a byte and don't simply span one byte
-                    if((drawEndY & 7) && startByte != endByte)
+                    if((drawData.drawEndY & 7) && drawStartByte != drawEndByte)
                     {
                         uint8_t endStart = thisWallByte * 8;
                         uint8_t bm = fastlshift8(endStart & 7);
-                        for (uint8_t i = endStart; i < drawEndY; i++)
+                        for (uint8_t i = endStart; i < drawData.drawEndY; i++)
                         {
                             _SPRITEBITUNROLL(bm, (~bm));
                             bm <<= 1;
@@ -531,10 +615,10 @@ public:
 
                     #else // No loop unrolling
 
-                    uint8_t y = drawStartY;
+                    uint8_t y = drawData.drawStartY;
 
                     //Funny hack; code is written for loop unrolling first, so we have to kind of "fit in" to the macro system
-                    if((drawStartY & 7) == 0) thisWallByte--;
+                    if((drawData.drawStartY & 7) == 0) thisWallByte--;
 
                     do
                     {
@@ -550,7 +634,7 @@ public:
                         uint8_t bm = fastlshift8(bidx);
                         _SPRITEBITUNROLL(bm, ~bm);
                     }
-                    while(++y < drawEndY); //EXCLUSIVE
+                    while(++y < drawData.drawEndY); //EXCLUSIVE
 
                     //The above loop specifically CAN'T reach the last byte, so although it's wasteful in the case of a 
                     //sprite ending at the bottom of the screen, it's still better than always incurring an if statement... maybe.
@@ -561,25 +645,11 @@ public:
                 }
 
                 //This ONE step is why there has to be a big if statement up there. 
-                texX += stepX;
+                texX += drawData.stepX;
             }
-            while(++x < drawEndX); //EXCLUSIVE
+            while(++x < drawData.drawEndX); //EXCLUSIVE
             // ------- END CRITICAL SECTION -------------
 
-            #ifdef RCPRINTSPRITEDATA
-            //Clear a section for us to use
-            constexpr uint8_t sdh = 10;
-            arduboy->fillRect(0, HEIGHT - sdh, VIEWWIDTH, sdh, BLACK);
-            //Print some junk
-            tinyfont->setCursor(0, HEIGHT - sdh);
-            tinyfont->print((float)transformXT, 4);
-            tinyfont->print(" Y");
-            tinyfont->print(ssY);
-            tinyfont->setCursor(0, HEIGHT - sdh + 5);
-            tinyfont->print((float)transformYT, 4);
-            tinyfont->print(" W");
-            tinyfont->print(spriteWidth);
-            #endif
         }
     }
 };
