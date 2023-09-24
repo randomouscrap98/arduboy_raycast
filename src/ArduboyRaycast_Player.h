@@ -17,6 +17,16 @@ public:
         this->dirY = fov * sin(angle);
     }
 
+    uflot calcNewX(float movement)
+    {
+        return this->posX + this->dirX * movement;
+    }
+
+    uflot calcNewY(float movement)
+    {
+        return this->posY + this->dirY * movement;
+    }
+
     //Attempt to move the player the given delta movement and rotation, using the given solidity checker for position
     void tryMovement(float movement, float rotation, bool (* solidChecker)(uflot,uflot))
     {
@@ -24,8 +34,8 @@ public:
         {
             uflot posX = this->posX;
             uflot posY = this->posY;
-            uflot newPosX = posX + this->dirX * movement;
-            uflot newPosY = posY + this->dirY * movement;
+            uflot newPosX = this->calcNewX(movement);
+            uflot newPosY = this->calcNewY(movement);
 
             if (solidChecker(newPosX, posY))
                 newPosX = posX;

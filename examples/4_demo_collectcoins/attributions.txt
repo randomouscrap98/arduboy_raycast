@@ -1,0 +1,3 @@
+- Tileset comes from https://piiixl.itch.io/1-bit-patterns-and-tiles, thank you!
+- Coin sprites come from https://dani-maccari.itch.io/1bit-platformer-doungeoun, thank you!
+- Background is from me, use it however you like

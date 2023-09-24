@@ -118,7 +118,7 @@ void coinBehaviorFrameAnimate(RcSprite<1> * sprite)
 {
     // We have it rotate at a speed 1/8th of the overall framerate of the game.
     // We have 4 frames of animation, which is 2 bits. We select 2 bits out of the frame
-    // count 3 bits up from the bottom, which we know will change once every 8 frames.
+    // count, 3 bits up from the bottom, which we know will change once every 8 frames.
     sprite->frame = COINBASEFRAME + ((arduboy.frameCount & 0b11000) >> 3);
 }
 

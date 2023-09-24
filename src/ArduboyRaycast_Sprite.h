@@ -25,7 +25,7 @@ public:
     uint8_t intstate[InternalStateBytes];
 
     void setActive(bool active) {
-        this->state = (this->state & ~RSSTATEACTIVE) | (active ? 1 : 0);
+        this->state = (this->state & ~RSSTATEACTIVE) | (active ? RSSTATEACTIVE : 0);
     }
 
     void setSizeIndex(uint8_t size) {
@@ -68,5 +68,13 @@ public:
 
     inline bool colliding(uflot x, uflot y) {
         return x > this->x1 && x < this->x2 && y > this->y1 && y < this->y2;
+    }
+
+    void setActive(bool active) {
+        this->state = (this->state & ~RSSTATEACTIVE) | (active ? RSSTATEACTIVE : 0);
+    }
+
+    inline bool isActive() {
+        return this->state & RSSTATEACTIVE;
     }
 };
