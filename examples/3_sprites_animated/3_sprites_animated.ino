@@ -73,7 +73,7 @@ bool isSolid(uflot x, uflot y)
     // The location is solid if the map cell is nonzero OR if we're colliding with
     // any bounding boxes
     return raycast.worldMap.getCell(x.getInteger(), y.getInteger()) != 0 || 
-        raycast.sprites.firstColliding(x, y) != NULL;
+        raycast.sprites.firstColliding(x, y, RBSTATESOLID) != NULL;
 }
 
 // You have to write this yourself but I provide a helper function which automatically does 

@@ -25,7 +25,7 @@
 #include "coin_b.h"
 
 // Gameplay constants. You don't have to define these, but it's nice to have
-constexpr uint8_t FRAMERATE = 35; // because we're not rendering full width, we can increase the fps
+constexpr uint8_t FRAMERATE = 35; 
 constexpr float MOVESPEED = 3.0f / FRAMERATE;
 constexpr float ROTSPEED = 3.25f / FRAMERATE;
 
@@ -69,6 +69,12 @@ RcContainer<MAXNUMCOINS, NUMINTERNALBYTES, 100, HEIGHT> raycast(tilesheet, sprit
 uint8_t foundCoins = 0;
 GameState state = GameState::Normal;
 
+// These end up being expensive to calculate (sin and float math yeesh!), so 
+// doing it for EVERY coin is wasteful. We can cache the same values and use
+// them for all coin animations
+uint8_t currentCoinFrame = COINBASEFRAME;
+int8_t currentCoinHeight = 0;
+
 Arduboy2 arduboy;
 ArduboyTones sound(arduboy.audio.enabled);
 
@@ -77,8 +83,8 @@ ArduboyTones sound(arduboy.audio.enabled);
 // from the sprite animation example to create a frame animated, bobbing coin
 void coinAnimation(RcSprite<NUMINTERNALBYTES> * sprite)
 {
-    sprite->frame = COINBASEFRAME + ((arduboy.frameCount & 0b11000) >> 3);
-    sprite->setHeight(4 * sin(arduboy.frameCount / 6.0));
+    sprite->frame = currentCoinFrame; //COINBASEFRAME + ((arduboy.frameCount & 0b11000) >> 3);
+    sprite->setHeight(currentCoinHeight); //4 * sin(arduboy.frameCount / 6.0));
 }
 
 // Since we're setting up "coins" a lot, let's make a function that
@@ -284,6 +290,10 @@ void loop()
     if(!arduboy.nextFrame()) return;
 
     arduboy.pollButtons();
+
+    // Calculate these ONCE per frame, it's expensive! You should do this for any repeat animations!
+    currentCoinFrame = COINBASEFRAME + ((arduboy.frameCount & 0b11000) >> 3);
+    currentCoinHeight = 4 * sin(arduboy.frameCount / 6.0);
 
     // Render one of two screens based on the overall game state
     if(state == GameState::Normal)
