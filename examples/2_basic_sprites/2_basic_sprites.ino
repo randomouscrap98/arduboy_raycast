@@ -8,7 +8,7 @@
 #include "spritesheet.h"
 
 // Gameplay constants. You don't have to define these, but it's nice to have
-constexpr uint8_t FRAMERATE = 25;   //Sprites are a bit heavier; at this full width resolution, you'll get frame drops.
+constexpr uint8_t FRAMERATE = 30;   //Sprites are a bit heavier; at this full width resolution, you'll get frame drops.
 constexpr float MOVESPEED = 2.5f / FRAMERATE;
 constexpr float ROTSPEED = 3.0f / FRAMERATE;
 

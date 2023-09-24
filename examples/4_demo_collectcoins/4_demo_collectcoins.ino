@@ -25,7 +25,7 @@
 #include "coin_b.h"
 
 // Gameplay constants. You don't have to define these, but it's nice to have
-constexpr uint8_t FRAMERATE = 35; 
+constexpr uint8_t FRAMERATE = 40; 
 constexpr float MOVESPEED = 3.0f / FRAMERATE;
 constexpr float ROTSPEED = 3.25f / FRAMERATE;
 
@@ -307,8 +307,11 @@ void loop()
         // on the right that remains static. This increases performance, as we can simply
         // redraw that area on the right only when something "interesting" happens 
         // (like when you collect a coin). The arduboy2 library gives you this flexibility,
-        // might as well use it!
-        Sprites::drawOverwrite(0, 0, raycastBg, 0);
+        // might as well use it! EDIT: I'm not using the arduboy library for this, since 
+        // the background is byte aligned and we can optimize the draw. Plus it gets rid
+        // of quite a few bytes, not using drawOverwrite at all.
+        raycast.render.drawRaycastBackground(&arduboy, raycastBg);
+        //Sprites::drawOverwrite(0, 0, raycastBg, 0);
 
         // Then just do a raycast iteration. This also runs the sprite behavior functions!
         raycast.runIteration(&arduboy);

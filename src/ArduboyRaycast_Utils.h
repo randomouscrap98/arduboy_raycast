@@ -46,7 +46,6 @@ void fastClear(Arduboy2Base * arduboy, uint8_t x, uint8_t y, uint8_t x2, uint8_t
         memset(arduboy->sBuffer + (i * 128) + x, 0, x2 - x);
 }
 
-
 //For SOME REASON, it's less generated code to call these four things than to call any 
 //rectangle function, or to even make this a proper function. Oh well
 #define FASTRECT(a,x,y,x2,y2,c) \

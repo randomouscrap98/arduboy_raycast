@@ -71,6 +71,7 @@ class RcRender
 public:
     static constexpr uint8_t VIEWWIDTH = W;
     static constexpr uint8_t VIEWHEIGHT = H;
+    static constexpr uint8_t VIEWHEIGHTBYTES = VIEWHEIGHT >> 3;
     static constexpr uint8_t MIDSCREENY = VIEWHEIGHT / 2;
     static constexpr uint8_t MIDSCREENX = VIEWWIDTH / 2;
     static constexpr uflot INVWIDTH = 1.0 / VIEWWIDTH;
@@ -99,6 +100,15 @@ public:
     inline void clearRaycast(Arduboy2Base * arduboy)
     {
         fastClear(arduboy, 0, 0, VIEWWIDTH, VIEWHEIGHT);
+    }
+
+    // Draw a fast(?) raycast background, assumed to start at 0,0. Your background should
+    // NOT have the usual width/height. Will underdraw in the Y direction if VIEWHEIGHT not 
+    // a multiple of 8
+    inline void drawRaycastBackground(Arduboy2Base * arduboy, const uint8_t * bg)
+    {
+        for(uint8_t i = 0; i < VIEWHEIGHTBYTES; ++i)
+            memcpy_P(arduboy->sBuffer + i * WIDTH, bg + i * VIEWWIDTH, VIEWWIDTH);
     }
 
     // Set the light intensity for raycasting. Performs several expensive calculations, only set this
@@ -292,26 +302,28 @@ public:
         uint8_t thisWallByte = (((yStart >> 1) >> 1) >> 1);
         uint8_t * sbuffer = arduboy->sBuffer;
 
+        uint8_t lastAccum;
         uint8_t fullstep = step.getInteger();
         uint8_t accum = (texPos.getFraction() >> 8);
-        uint8_t lastAccum = accum;
         uint8_t accustep = (step.getFraction() >> 8);
         texData >>= texPos.getInteger();
+
+        // Different kind of shade check for white fog
+        #ifdef RCWHITEFOG
+        #define _WALLSHADECHECK(bm) !(shade & (bm)) ||
+        #else
+        #define _WALLSHADECHECK(bm) (shade & (bm)) &&
+        #endif
 
         //Pull wall byte, save location
         #define _WALLREADBYTE() bofs = thisWallByte * WIDTH + x; texByte = sbuffer[bofs];
         //Write previously read wall byte, go to next byte
         #define _WALLWRITENEXT() sbuffer[bofs] = texByte; thisWallByte++;
-        //Work for setting bits of wall byte
-        #ifdef RCWHITEFOG
-        #define _WALLBITUNROLL(bm,nbm) if(!(shade & (bm)) || (texData & fastlshift16(texPos.getInteger()))) texByte |= (bm); else texByte &= (nbm); texPos += step;
-        #else
-        //#define _WALLBITUNROLL(bm,nbm) if((shade & (bm)) && (texData & fastlshift16(texPos.getInteger()))) texByte |= (bm); else texByte &= (nbm); texPos += step;
+        //Work for setting bits of wall byte. Use an imperfect overflow accumulator to approximate stepping through texture.
         #define _WALLBITUNROLL(bm,nbm) \
-            if((shade & (bm)) && (texData & 1)) texByte |= (bm); \
+            if(_WALLSHADECHECK(bm) (texData & 1)) texByte |= (bm); \
             else texByte &= (nbm); \
             lastAccum = accum; accum += accustep; if(accum < lastAccum) { texData >>= 1; } if(fullstep) { texData >>= fullstep; }
-        #endif
 
         _WALLREADBYTE();
 
@@ -529,14 +541,18 @@ public:
             if(drawData.stepX == 0 && drawData.stepY == 0) continue;
 
             uflot texX = drawData.texXInit;
-            uflot texY = drawData.texYInit;
             uint8_t fr = sprite->frame;
 
             uint8_t drawStartByte = (((drawData.drawStartY >> 1) >> 1) >> 1); //right shift 3 without loop
             uint8_t drawEndByte = (((drawData.drawEndY >> 1) >> 1) >> 1);  //The byte to end the unrolled loop on. Could be inclusive or exclusive
             uint16_t texData = 0;
             uint16_t texMask = 0;
-            uint8_t lastTx = 255;
+
+            uint8_t lastAccum;
+            uint8_t accumStart = drawData.texYInit.getFraction();
+            uint8_t accuStep = drawData.stepY.getFraction();
+            uint8_t fullstep = drawData.stepY.getInteger();
+            uint8_t preshift = drawData.texYInit.getInteger();
 
             uint8_t x = drawData.drawStartX;
 
@@ -548,31 +564,27 @@ public:
                 {
                     uint8_t tx = texX.getInteger();
 
-                    // One if statement on every stripe to load sprite data fewer times.
-                    // The tradeoff might not be worth it
-                    if(lastTx != tx)
-                    {
-                        texData = readTextureStrip16(spritesheet, fr, tx);
-                        texMask = readTextureStrip16(spritesheet_Mask, fr, tx);
-                        lastTx = tx;
-                    }
+                    texData = readTextureStrip16(spritesheet, fr, tx) >> preshift;
+                    texMask = readTextureStrip16(spritesheet_Mask, fr, tx) >> preshift;
 
                     //A small optimization for small sprites
                     if(!texMask) goto SKIPSPRITESTRIPE;
-
-                    texY = drawData.texYInit;
 
                     //These five variables (including texData+texMask) are needed as part of the loop unrolling system
                     uint16_t bofs;
                     uint8_t texByte;
                     uint8_t thisWallByte = drawStartByte;
 
+                    uint8_t accum = accumStart;
+
                     //Pull screen byte, save location
                     #define _SPRITEREADSCRBYTE() bofs = thisWallByte * WIDTH + x; texByte = sbuffer[bofs];
                     //Write previously read screen byte, go to next byte
                     #define _SPRITEWRITESCRNEXT() sbuffer[bofs] = texByte; thisWallByte++;
                     //Work for setting bits of screen byte
-                    #define _SPRITEBITUNROLL(bm,nbm) { uint16_t btmask = fastlshift16(texY.getInteger()); if (texMask & btmask) { if (texData & btmask) texByte |= bm; else texByte &= nbm; } texY += drawData.stepY; }
+                    #define _SPRITEBITUNROLL(bm,nbm) \
+                        if (texMask & 1) { if (texData & 1) texByte |= bm; else texByte &= nbm; } \
+                        lastAccum = accum; accum += accuStep; if(accum < lastAccum) { texMask >>= 1; texData >>= 1; } if(fullstep) { texMask >>= fullstep; texData >>= fullstep; }
 
                     _SPRITEREADSCRBYTE();
 
