@@ -9,7 +9,7 @@ constexpr uint8_t BAYERGRADIENTS = 16;
 // Bayer gradients, not including the 0 fill (useless?).
 // Takes up 64 precious bytes of RAM
 constexpr uint8_t b_shading[] PROGMEM = {
-    0xFF, 0xFF, 0xFF, 0xFF, // Beyer 16
+    0xFF, 0xFF, 0xFF, 0xFF, // Bayer 16
     0xEE, 0xFF, 0xFF, 0xFF, // 0
     0xEE, 0xFF, 0xBB, 0xFF,
     0xEE, 0xFF, 0xAA, 0xFF, // 2 
@@ -30,6 +30,6 @@ constexpr uint8_t b_shading[] PROGMEM = {
 // Compute the shading byte for the given distance and x value
 inline uint8_t calcShading(uflot perpWallDist, uint8_t x, const uflot DARKNESS)
 {
-    uint8_t dither = floorFixed(perpWallDist * DARKNESS * perpWallDist).getInteger();
-    return (dither >= BAYERGRADIENTS) ? 0 : pgm_read_byte(b_shading + (dither * 4) + (x & 3));
+    uint8_t dither = (perpWallDist * DARKNESS * perpWallDist).getInteger();
+    return (dither >= BAYERGRADIENTS) ? 0 : pgm_read_byte(b_shading + ((dither << 1) << 1) + (x & 3));
 }

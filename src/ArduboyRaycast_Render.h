@@ -302,10 +302,9 @@ public:
         uint8_t thisWallByte = (((yStart >> 1) >> 1) >> 1);
         uint8_t * sbuffer = arduboy->sBuffer;
 
-        uint8_t lastAccum;
         uint8_t fullstep = step.getInteger();
-        uint8_t accum = (texPos.getFraction() >> 8);
         uint8_t accustep = (step.getFraction() >> 8);
+        uint8_t accum = (texPos.getFraction() >> 8);
         texData >>= texPos.getInteger();
 
         // Different kind of shade check for white fog
@@ -323,7 +322,19 @@ public:
         #define _WALLBITUNROLL(bm,nbm) \
             if(_WALLSHADECHECK(bm) (texData & 1)) texByte |= (bm); \
             else texByte &= (nbm); \
-            lastAccum = accum; accum += accustep; if(accum < lastAccum) { texData >>= 1; } if(fullstep) { texData >>= fullstep; }
+            asm volatile( \
+                "add %[accum], %[step]    \n" \
+                "brcc .+4       \n" \
+                "lsr %B[td]     \n" \
+                "ror %A[td]     \n" \
+                : [accum] "+&r" (accum), \
+                  [td] "+&r" (texData)    \
+                : [step] "r" (accustep) \
+            ); \
+            if(fullstep) { texData >>= fullstep; }
+        
+        // The above volatile section is a special fractional accumulator which uses the carry bit to determine
+        // if an additional right shift of the texture is in order
 
         _WALLREADBYTE();
 
@@ -548,9 +559,9 @@ public:
             uint16_t texData = 0;
             uint16_t texMask = 0;
 
-            uint8_t lastAccum;
+            //uint8_t lastAccum;
             uint8_t accumStart = drawData.texYInit.getFraction();
-            uint8_t accuStep = drawData.stepY.getFraction();
+            uint8_t accustep = drawData.stepY.getFraction();
             uint8_t fullstep = drawData.stepY.getInteger();
             uint8_t preshift = drawData.texYInit.getInteger();
 
@@ -584,7 +595,19 @@ public:
                     //Work for setting bits of screen byte
                     #define _SPRITEBITUNROLL(bm,nbm) \
                         if (texMask & 1) { if (texData & 1) texByte |= bm; else texByte &= nbm; } \
-                        lastAccum = accum; accum += accuStep; if(accum < lastAccum) { texMask >>= 1; texData >>= 1; } if(fullstep) { texMask >>= fullstep; texData >>= fullstep; }
+                        asm volatile( \
+                            "add %[accum], %[step]    \n" \
+                            "brcc .+8       \n" \
+                            "lsr %B[td]     \n" \
+                            "ror %A[td]     \n" \
+                            "lsr %B[td2]     \n" \
+                            "ror %A[td2]     \n" \
+                            : [accum] "+&r" (accum), \
+                              [td] "+&r" (texData),  \
+                              [td2] "+&r" (texMask)  \
+                            : [step] "r" (accustep) \
+                        ); \
+                        if(fullstep) { texMask >>= fullstep; texData >>= fullstep; }
 
                     _SPRITEREADSCRBYTE();
 
