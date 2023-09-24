@@ -47,7 +47,7 @@ bool isSolid(uflot x, uflot y)
     // The location is solid if the map cell is nonzero OR if we're colliding with
     // any bounding boxes
     return raycast.worldMap.getCell(x.getInteger(), y.getInteger()) != 0 || 
-        raycast.sprites.firstColliding(x, y) != NULL;
+        raycast.sprites.firstColliding(x, y, RBSTATESOLID) != NULL;
 }
 
 // You have to write this yourself but I provide a helper function which automatically does 
@@ -128,11 +128,11 @@ void setup()
     // also shrink the table so it's not absolutely massive, and move it down
     // a bit so it looks like it's on the floor.
     s = raycast.sprites.addSprite(4, 1.5, TABLESPRITE, TABLESIZE, TABLEOFFSET, NULL);
-    raycast.sprites.addSpriteBounds(s, TABLEBOUNDS);
+    raycast.sprites.addSpriteBounds(s, TABLEBOUNDS, true);
     s = raycast.sprites.addSprite(4, 7.5, TABLESPRITE, TABLESIZE, TABLEOFFSET, NULL);
-    raycast.sprites.addSpriteBounds(s, TABLEBOUNDS);
+    raycast.sprites.addSpriteBounds(s, TABLEBOUNDS, true);
     s = raycast.sprites.addSprite(1.5, 4.5, TABLESPRITE, TABLESIZE, TABLEOFFSET, NULL);
-    raycast.sprites.addSpriteBounds(s, TABLEBOUNDS);
+    raycast.sprites.addSpriteBounds(s, TABLEBOUNDS, true);
 
     constexpr uint8_t VASEOFFSET = 2;
     constexpr uint8_t VASESIZE = 1;
@@ -145,13 +145,13 @@ void setup()
     // the view width of the raycaster, which is a direct savings, and making the bounding boxes
     // for big sprites larger so players can't get close.
     s = raycast.sprites.addSprite(1.4, 1.4, VASESPRITE, VASESIZE, VASEOFFSET, NULL);
-    raycast.sprites.addSpriteBounds(s, VASEBOUNDS);
+    raycast.sprites.addSpriteBounds(s, VASEBOUNDS, true);
     s = raycast.sprites.addSprite(1.4, 7.6, VASESPRITE, VASESIZE, VASEOFFSET, NULL);
-    raycast.sprites.addSpriteBounds(s, VASEBOUNDS);
+    raycast.sprites.addSpriteBounds(s, VASEBOUNDS, true);
     s = raycast.sprites.addSprite(6.6, 1.4, VASESPRITE, VASESIZE, VASEOFFSET, NULL);
-    raycast.sprites.addSpriteBounds(s, VASEBOUNDS);
+    raycast.sprites.addSpriteBounds(s, VASEBOUNDS, true);
     s = raycast.sprites.addSprite(6.6, 7.6, VASESPRITE, VASESIZE, VASEOFFSET, NULL);
-    raycast.sprites.addSpriteBounds(s, VASEBOUNDS);
+    raycast.sprites.addSpriteBounds(s, VASEBOUNDS, true);
 
     constexpr uint8_t TREEOFFSET = 8;
     constexpr uint8_t TREESIZE = 2;
@@ -160,13 +160,13 @@ void setup()
 
     // Let's place trees on some sides of the pillar
     s = raycast.sprites.addSprite(2.5, 3.3, TREESPRITE, TREESIZE, TREEOFFSET, NULL);
-    raycast.sprites.addSpriteBounds(s, TREEBOUNDS);
+    raycast.sprites.addSpriteBounds(s, TREEBOUNDS, true);
     s = raycast.sprites.addSprite(2.5, 5.7, TREESPRITE, TREESIZE, TREEOFFSET, NULL);
-    raycast.sprites.addSpriteBounds(s, TREEBOUNDS);
+    raycast.sprites.addSpriteBounds(s, TREEBOUNDS, true);
     s = raycast.sprites.addSprite(5.5, 3.3, TREESPRITE, TREESIZE, TREEOFFSET, NULL);
-    raycast.sprites.addSpriteBounds(s, TREEBOUNDS);
+    raycast.sprites.addSpriteBounds(s, TREEBOUNDS, true);
     s = raycast.sprites.addSprite(5.5, 5.7, TREESPRITE, TREESIZE, TREEOFFSET, NULL);
-    raycast.sprites.addSpriteBounds(s, TREEBOUNDS);
+    raycast.sprites.addSpriteBounds(s, TREEBOUNDS, true);
 
     // And then hide the "thing" (whatever it is) in a corner. It won't have 
     // collision. Also make it a bit smaller

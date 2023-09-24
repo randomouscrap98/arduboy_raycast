@@ -7,8 +7,10 @@
 // These are bitmasks to get data out of state
 constexpr uint8_t RSSTATEACTIVE = 0b00000001;
 constexpr uint8_t RSSTATESIZE = 0b00000110;
-constexpr uint8_t RSTATEYOFFSET = 0b11111000;
+constexpr uint8_t RSSTATEYOFFSET = 0b11111000;
 
+constexpr uint8_t RBSTATEACTIVE = 0b00000001;
+constexpr uint8_t RBSTATESOLID = 0b00000010;
 
 
 // Try to make this fit into as little space as possible
@@ -33,7 +35,7 @@ public:
     }
 
     void setHeight(int8_t height) {
-        this->state = (this->state & ~RSTATEYOFFSET) | (height < 0 ? 128 : 0) | ((abs(height) << 3) & RSTATEYOFFSET);
+        this->state = (this->state & ~RSSTATEYOFFSET) | (height < 0 ? 128 : 0) | ((abs(height) << 3) & RSSTATEYOFFSET);
     }
 
     inline bool isActive() {
@@ -45,7 +47,7 @@ public:
     }
 
     inline int8_t getHeight() {
-        return (this-> state & RSTATEYOFFSET) >> 3;
+        return (this-> state & RSSTATEYOFFSET) >> 3;
     }
 };
 
@@ -71,10 +73,18 @@ public:
     }
 
     void setActive(bool active) {
-        this->state = (this->state & ~RSSTATEACTIVE) | (active ? RSSTATEACTIVE : 0);
+        this->state = (this->state & ~RBSTATEACTIVE) | (active ? RBSTATEACTIVE : 0);
+    }
+
+    void setSolid(bool solid) {
+        this->state = (this->state & ~RBSTATESOLID) | (solid ? RBSTATESOLID : 0);
     }
 
     inline bool isActive() {
-        return this->state & RSSTATEACTIVE;
+        return this->state & RBSTATEACTIVE;
+    }
+
+    inline bool isSolid() {
+        return this->state & RBSTATESOLID;
     }
 };

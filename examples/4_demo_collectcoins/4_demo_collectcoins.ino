@@ -33,6 +33,7 @@ constexpr float ROTSPEED = 3.25f / FRAMERATE;
 // it easier to write functions and pass around data types. We need to store a pointer
 // to a bounds, so the number of bytes should essentially become 2
 constexpr uint8_t NUMINTERNALBYTES = sizeof(RcBounds *);
+constexpr uint8_t COINBITFLAG = 0x80;
 
 // Some constants for the coin sprite. If you look at the coin sprite itself,
 // you'll notice it's very small within its 16x16 frame. Sprites (currently)
@@ -50,6 +51,12 @@ constexpr uint8_t MAXNUMCOINS = 16;
 enum GameState {
     Normal,
     WinScreen
+};
+
+// The winning melody
+const uint16_t winsong[] PROGMEM = {
+    NOTE_C5,128, 0,64, NOTE_C5,64, 0,32, NOTE_C5,64, 0,16, NOTE_G5,256,
+    TONES_END
 };
 
 // We're going to generate 16 sprites and use EVERY slot. Also notice we're 
@@ -80,9 +87,16 @@ void coinAnimation(RcSprite<NUMINTERNALBYTES> * sprite)
 // ALWAYS going to place it in the center of the cell
 RcSprite<NUMINTERNALBYTES> * addCoin(uint8_t x, uint8_t y)
 {
-    // Create a coin sprite and put a generous bounds around it for us to walk into
+    // Create a coin sprite and put a generous bounds around it for us to walk into.
     RcSprite<NUMINTERNALBYTES> * sprite = raycast.sprites.addSprite(x + 0.5, y + 0.5, COINBASEFRAME, COINSIZEINDEX, COINBASEHEIGHT, &coinAnimation);
-    RcBounds * bounds = raycast.sprites.addSpriteBounds(sprite, 0.75);
+    // Coins are NOT solid, notice the false at the end. You can create bounds that are simply used 
+    // for hit detection. 
+    RcBounds * bounds = raycast.sprites.addSpriteBounds(sprite, 0.85, false);
+    // Here, we use one of the bits of state to mark this as a coin for hit detection. 
+    // Later, when we scan for collisions, we can pass in that same bitmask to only find
+    // detections against coins. Since coins are the only thing we have, this isn't necessary,
+    // but it's important to know! I would say only the top 4 bits are safe in the state byte.
+    bounds->state |= COINBITFLAG;
 
     // This is important: you can use sprite internal state to link the bounds to the sprite.
     // There are better ways to do this, this is just an example. We're copying the pointer for the
@@ -100,14 +114,42 @@ RcSprite<NUMINTERNALBYTES> * addCoin(uint8_t x, uint8_t y)
 bool isSolid(uflot x, uflot y)
 {
     // The location is solid if the map cell is nonzero OR if we're colliding with
-    // any bounding boxes
+    // any (solid) bounding boxes
     return raycast.worldMap.getCell(x.getInteger(), y.getInteger()) != 0 || 
-        raycast.sprites.firstColliding(x, y) != NULL;
+        raycast.sprites.firstColliding(x, y, RBSTATESOLID) != NULL;
 }
 
-// A function which will do the logic for "hitting" a sprite bounding box.
-void hitBounds(RcBounds * bounds)
+// You have to write this yourself but I provide a helper function which automatically does 
+// bounds checking on the map and other defined bounding boxes, as long as you provide a 
+// function which says whether something is a collision (see above)
+void movement()
 {
+    float movement = 0;
+    float rotation = 0;
+
+    // Simple movement forward and backward
+    if (arduboy.pressed(UP_BUTTON))
+        movement = MOVESPEED;
+    if (arduboy.pressed(DOWN_BUTTON))
+        movement = -MOVESPEED;
+
+    // Simple rotation
+    if (arduboy.pressed(RIGHT_BUTTON))
+        rotation = -ROTSPEED;
+    if (arduboy.pressed(LEFT_BUTTON))
+        rotation = ROTSPEED;
+
+    raycast.player.tryMovement(movement, rotation, &isSolid);
+}
+
+// See if we're collecting any coins. 
+void testCoinCollection()
+{
+    // Go scan for any coin collisions. This should be exceptionally fast, especially compared with
+    // raycast rendering, and shouldn't make a difference to performance (if it does, let me know)
+    RcBounds * bounds = raycast.sprites.firstColliding(raycast.player.posX, raycast.player.posY, COINBITFLAG);
+
+    // Nothing found, nothing to do
     if(bounds == NULL)
         return;
     
@@ -132,45 +174,22 @@ void hitBounds(RcBounds * bounds)
         // play a sound and increase the found counter
         if(bptr == bounds)
         {
-            sound.tone(600, 64);
+            foundCoins++;
+            if(foundCoins == MAXNUMCOINS)
+            {
+                sound.tones(winsong);
+                state = GameState::WinScreen;
+            }
+            else
+            {
+                sound.tone(500 + foundCoins * 10, 32, 700 + foundCoins * 10, 32);
+            }
             sprite->setActive(false); //This immediately removes the sprite from the pool
             bounds->setActive(false);
-            foundCoins++;
             drawInventory();
             break;
         }
     }
-}
-
-// You have to write this yourself but I provide a helper function which automatically does 
-// bounds checking on the map and other defined bounding boxes, as long as you provide a 
-// function which says whether something is a collision (see above)
-void movement()
-{
-    float movement = 0;
-    float rotation = 0;
-
-    // Simple movement forward and backward
-    if (arduboy.pressed(UP_BUTTON))
-        movement = MOVESPEED;
-    if (arduboy.pressed(DOWN_BUTTON))
-        movement = -MOVESPEED;
-
-    // Simple rotation
-    if (arduboy.pressed(RIGHT_BUTTON))
-        rotation = -ROTSPEED;
-    if (arduboy.pressed(LEFT_BUTTON))
-        rotation = ROTSPEED;
-
-    // Here we're doing something different than before: we want to see if we run
-    // into any coins. If we do, we should remove the coin and update the coin count
-    // BEFORE we try the movement, as coin bounding boxes will halt the player.
-    // You can do this any way you'd like, you don't have to use the bounding box system.
-    uflot newX = raycast.player.calcNewX(movement);
-    uflot newY = raycast.player.calcNewY(movement);
-    hitBounds(raycast.sprites.firstColliding(newX, newY));
-
-    raycast.player.tryMovement(movement, rotation, &isSolid);
 }
 
 
@@ -194,6 +213,9 @@ void generateNew()
 {
     arduboy.clear();
 
+    // Get rid of (ll sprites (this is important to call!!)
+    raycast.sprites.resetAll();
+
     foundCoins = 0;
     state = GameState::Normal;
 
@@ -206,6 +228,7 @@ void generateNew()
 
     while(coins_generated < MAXNUMCOINS)
     {
+        // Find a random location for the coin
         uint8_t rndx = 1 + random(14);
         uint8_t rndy = 1 + random(14);
 
@@ -219,7 +242,7 @@ void generateNew()
         
         bool overlapping = false;
 
-        // Scan the sprite array to see if we overlap other coins
+        // Scan the sprite array to see if we overlap other coins slots
         for(uint8_t i = 0; i < raycast.sprites.numsprites; i++)
         {
             RcSprite<NUMINTERNALBYTES> * sprite = &raycast.sprites.sprites[i];
@@ -243,8 +266,6 @@ void generateNew()
 }
 
 
-// The normal arduino setup. Here, we can copy our map out of program memory and into 
-// the map buffer in memory. 
 void setup()
 {
     arduboy.begin();
@@ -254,6 +275,7 @@ void setup()
     // Make our coins an "exact" size scaling (not really necessary, I just like it)
     raycast.render.spritescaling[COINSIZEINDEX] = 9.0/16;
 
+    // Generate the first maze
     generateNew();
 }
 
@@ -266,20 +288,16 @@ void loop()
     // Render one of two screens based on the overall game state
     if(state == GameState::Normal)
     {
-        // Process player interaction, or however you'd like to do it
+        // Process player movement + interaction
         movement();
-
-        // After movement, we know if we've won. Or you could do this whenever, idk
-        if(foundCoins == MAXNUMCOINS)
-        {
-            state = GameState::WinScreen;
-            return;
-        }
+        testCoinCollection();
 
         // Notice something: we're drawing a background but this time it doesn't take up the
         // entire screen, since our raycast function is only 100 wide. So there's a section
         // on the right that remains static. This increases performance, as we can simply
-        // redraw that area on the right only when something "interesting" happens.
+        // redraw that area on the right only when something "interesting" happens 
+        // (like when you collect a coin). The arduboy2 library gives you this flexibility,
+        // might as well use it!
         Sprites::drawOverwrite(0, 0, raycastBg, 0);
 
         // Then just do a raycast iteration. This also runs the sprite behavior functions!
@@ -288,7 +306,7 @@ void loop()
     else
     {
         arduboy.clear();
-        arduboy.setCursor(36,28);
+        arduboy.setCursor(40, 28);
         arduboy.print("Winner!");
 
         if(arduboy.justPressed(A_BUTTON))

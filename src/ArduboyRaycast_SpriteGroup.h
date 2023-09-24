@@ -14,6 +14,11 @@ public:
     uint8_t numsprites;
     uint8_t numbounds;
 
+    RcSprite<InternalStateBytes> * operator[](uint8_t index)
+    {
+        return this->sprites[index];
+    }
+
     void resetSprites()
     {
         memset(this->sprites, 0, sizeof(RcSprite<InternalStateBytes>) * this->numsprites);
@@ -111,7 +116,7 @@ public:
     }
 
     // Attempt to add a bounds to the bounds list.
-    RcBounds * addBounds(float x1, float y1, float x2, float y2)
+    RcBounds * addBounds(float x1, float y1, float x2, float y2, bool solid)
     {
         uint8_t numbounds = this->numbounds;
         for(uint8_t i = 0; i < numbounds; i++)
@@ -123,7 +128,8 @@ public:
                 bounds->x2 = muflot(x2);
                 bounds->y1 = muflot(y1);
                 bounds->y2 = muflot(y2);
-                bounds->state = RSSTATEACTIVE;
+                bounds->setActive(true);
+                bounds->setSolid(solid);
                 return bounds;
             }
         }
@@ -136,17 +142,18 @@ public:
     // of a square box surrounding said sprite. The bounding box will NOT move with the sprite, that's
     // up to you. You can add extra data to sprites to store the pointer to the bounding box (2 bytes)
     // and thus have a link between the two.
-    RcBounds * addSpriteBounds(RcSprite<InternalStateBytes> * sprite, float size)
+    RcBounds * addSpriteBounds(RcSprite<InternalStateBytes> * sprite, float size, bool solid)
     {
         float halfsize = size / 2;
-        return this->addBounds((float)sprite->x - halfsize, (float)sprite->y - halfsize, (float)sprite->x + halfsize, (float)sprite->y + halfsize);
+        return this->addBounds((float)sprite->x - halfsize, (float)sprite->y - halfsize, (float)sprite->x + halfsize, (float)sprite->y + halfsize, solid);
     }
 
     void deleteBounds(RcBounds * bounds) { bounds->state = 0; }
     void deleteSprite(RcSprite<InternalStateBytes> * sprite) { sprite->state = 0; }
 
-    //Get the first bounding box (in order of ID) which intersects this point
-    RcBounds * firstColliding(uflot x, uflot y)
+    //Get the first bounding box (in order of ID) which intersects this point. Optionally restrict 
+    //by bounds that have a nonzero value with the statemask
+    RcBounds * firstColliding(uflot x, uflot y, uint8_t statemask)
     {
         uint8_t numbounds = this->numbounds;
         for (uint8_t i = 0; i < numbounds; i++)
@@ -154,8 +161,11 @@ public:
             if (!ISSPRITEACTIVE((this->bounds[i])))
                 continue;
 
-            if(this->bounds[i].colliding(x, y))
-                return &this->bounds[i];
+            if(!statemask || (this->bounds[i].state & statemask))
+            {
+                if(this->bounds[i].colliding(x, y))
+                    return &this->bounds[i];
+            }
         }
 
         return NULL;
