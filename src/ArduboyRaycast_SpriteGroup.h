@@ -99,7 +99,9 @@ public:
                 sprite->x = muflot(x);
                 sprite->y = muflot(y);
                 sprite->frame = frame;
-                sprite->state = RSSTATEACTIVE | ((sizeLevel << 1) & RSSTATESIZE) | (heightAdjust < 0 ? 128 : 0) | ((abs(heightAdjust) << 3) & RSTATEYOFFSET);
+                sprite->setActive(true);
+                sprite->setHeight(heightAdjust);
+                sprite->setSizeIndex(sizeLevel);
                 sprite->behavior = func;
                 return sprite;
             }

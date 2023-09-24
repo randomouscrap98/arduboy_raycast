@@ -23,6 +23,30 @@ public:
     void (* behavior)(RcSprite<InternalStateBytes> *) = NULL;
 
     uint8_t intstate[InternalStateBytes];
+
+    void setActive(bool active) {
+        this->state = (this->state & ~RSSTATEACTIVE) | (active ? 1 : 0);
+    }
+
+    void setSizeIndex(uint8_t size) {
+        this->state = (this->state & ~RSSTATESIZE) | ((size << 1) & RSSTATESIZE);
+    }
+
+    void setHeight(int8_t height) {
+        this->state = (this->state & ~RSTATEYOFFSET) | (height < 0 ? 128 : 0) | ((abs(height) << 3) & RSTATEYOFFSET);
+    }
+
+    inline bool isActive() {
+        return this->state & RSSTATEACTIVE;
+    }
+
+    inline uint8_t getSizeIndex() {
+        return (this-> state & RSSTATESIZE) >> 1;
+    }
+
+    inline int8_t getHeight() {
+        return (this-> state & RSTATEYOFFSET) >> 3;
+    }
 };
 
 // Sorted sprite. Useful to keep original sprite list index as sprite ids 
