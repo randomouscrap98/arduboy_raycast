@@ -284,7 +284,6 @@ public:
         uint8_t yEnd = min(VIEWHEIGHT, MIDSCREENY + halfLine); //EXCLUSIVE
 
         //Everyone prefers the high precision tiles (and for some reason, it's now faster? so confusing...)
-        //UFixed<16,16> step = (float)RCTILESIZE / lineHeight; //NOTE: float division is faster than UFixed<16,16> here!!
         UFixed<16,16> texPos = (yStart + halfLine - MIDSCREENY) * step;
 
         //These four variables are needed as part of the loop unrolling system
@@ -292,6 +291,12 @@ public:
         uint8_t texByte;
         uint8_t thisWallByte = (((yStart >> 1) >> 1) >> 1);
         uint8_t * sbuffer = arduboy->sBuffer;
+
+        uint8_t fullstep = step.getInteger();
+        uint8_t accum = (texPos.getFraction() >> 8);
+        uint8_t lastAccum = accum;
+        uint8_t accustep = (step.getFraction() >> 8);
+        texData >>= texPos.getInteger();
 
         //Pull wall byte, save location
         #define _WALLREADBYTE() bofs = thisWallByte * WIDTH + x; texByte = sbuffer[bofs];
@@ -301,7 +306,11 @@ public:
         #ifdef RCWHITEFOG
         #define _WALLBITUNROLL(bm,nbm) if(!(shade & (bm)) || (texData & fastlshift16(texPos.getInteger()))) texByte |= (bm); else texByte &= (nbm); texPos += step;
         #else
-        #define _WALLBITUNROLL(bm,nbm) if((shade & (bm)) && (texData & fastlshift16(texPos.getInteger()))) texByte |= (bm); else texByte &= (nbm); texPos += step;
+        //#define _WALLBITUNROLL(bm,nbm) if((shade & (bm)) && (texData & fastlshift16(texPos.getInteger()))) texByte |= (bm); else texByte &= (nbm); texPos += step;
+        #define _WALLBITUNROLL(bm,nbm) \
+            if((shade & (bm)) && (texData & 1)) texByte |= (bm); \
+            else texByte &= (nbm); \
+            lastAccum = accum; accum += accustep; if(accum < lastAccum) { texData >>= 1; } if(fullstep) { texData >>= fullstep; }
         #endif
 
         _WALLREADBYTE();
@@ -328,8 +337,8 @@ public:
             _WALLREADBYTE();
         }
 
-        //Now the unrolled loop
-        while(thisWallByte < endByte)
+        // Now the unrolled loop
+        while (thisWallByte < endByte)
         {
             _WALLBITUNROLL(0b00000001, 0b11111110);
             _WALLBITUNROLL(0b00000010, 0b11111101);

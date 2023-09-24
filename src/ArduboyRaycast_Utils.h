@@ -138,3 +138,11 @@ flot fReciprocalNearUnitNoSign(flot x)
     else
         return flot::fromInternal(pgm_read_word(DIVISORS + (x.getInternal() & 0xFF)));
 }
+
+//template<typename T>
+//class TextureStepper
+//{
+//public:
+//    T step;
+//    T 
+//};
