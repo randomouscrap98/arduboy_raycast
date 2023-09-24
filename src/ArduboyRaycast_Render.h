@@ -539,18 +539,24 @@ public:
                 {
                     uint8_t tx = texX.getInteger();
 
-                    texY = drawData.texYInit;
-
-                    //These five variables (including texData+texMask) are needed as part of the loop unrolling system
-                    uint16_t bofs;
-                    uint8_t texByte;
-                    uint8_t thisWallByte = drawStartByte;
+                    // One if statement on every stripe to load sprite data fewer times.
+                    // The tradeoff might not be worth it
                     if(lastTx != tx)
                     {
                         texData = readTextureStrip16(spritesheet, fr, tx);
                         texMask = readTextureStrip16(spritesheet_Mask, fr, tx);
                         lastTx = tx;
                     }
+
+                    //A small optimization for small sprites
+                    if(!texMask) goto SKIPSPRITESTRIPE;
+
+                    texY = drawData.texYInit;
+
+                    //These five variables (including texData+texMask) are needed as part of the loop unrolling system
+                    uint16_t bofs;
+                    uint8_t texByte;
+                    uint8_t thisWallByte = drawStartByte;
 
                     //Pull screen byte, save location
                     #define _SPRITEREADSCRBYTE() bofs = thisWallByte * WIDTH + x; texByte = sbuffer[bofs];
@@ -641,6 +647,7 @@ public:
 
                 }
 
+                SKIPSPRITESTRIPE:
                 //This ONE step is why there has to be a big if statement up there. 
                 texX += drawData.stepX;
             }

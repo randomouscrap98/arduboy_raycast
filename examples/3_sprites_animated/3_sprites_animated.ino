@@ -187,10 +187,12 @@ void loop()
     // Process player interaction, or however you'd like to do it
     movement();
 
-    // It's too expensive to draw a true raycast floor, so you're stuck with just drawing a background 
-    // that's "good enough". The background is large enough to clear the screen, hence why we didn't call
-    // "clearRaycast" above
-    Sprites::drawOverwrite(0, 0, bg_full, 0);
+    // here's a funny hack: the "drawOverwite" function is very complicated, but we know that our 
+    // background buffer will take up the whole screen, so we can just memcpy it into the screen buffer
+    // and save both code and some cycles. This isn't a reliable optimization and doesn't save
+    // much, just thought I'd show it. Not including 'drawOverwrite' saves 84 bytes in the output
+    // and about 3% cpu
+    memcpy_P(arduboy.sBuffer, bg_full, 1024);
 
     // Then just do a raycast iteration. This also runs the sprite behavior functions!
     raycast.runIteration(&arduboy);
