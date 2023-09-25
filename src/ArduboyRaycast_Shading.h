@@ -31,5 +31,10 @@ constexpr uint8_t b_shading[] PROGMEM = {
 inline uint8_t calcShading(uflot perpWallDist, uint8_t x, const uflot DARKNESS)
 {
     uint8_t dither = (perpWallDist * DARKNESS * perpWallDist).getInteger();
-    return (dither >= BAYERGRADIENTS) ? 0 : pgm_read_byte(b_shading + ((dither << 1) << 1) + (x & 3));
+    asm volatile( // it refuses to do 8 bit left shift, why??
+        "lsl %0     \n"
+        "lsl %0     \n"
+        : "+r" (dither)
+    );
+    return (dither >= BAYERGRADIENTS << 2) ? 0 : pgm_read_byte(b_shading + dither + (x & 3));
 }
