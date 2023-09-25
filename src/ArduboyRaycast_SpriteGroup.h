@@ -137,19 +137,74 @@ public:
         return NULL;
     }
 
-    // Add a bounds for the given sprite to the bounds array. Since sprites are billboards and 
-    // always rotate to face the player, this shortcut function only allows you to give one dimension
-    // of a square box surrounding said sprite. The bounding box will NOT move with the sprite, that's
-    // up to you. You can add extra data to sprites to store the pointer to the bounding box (2 bytes)
-    // and thus have a link between the two.
+    // A shortcut function to add simple square bounds around the sprite and link the two together.
+    // It is equivalent to calling 'addBounds' then calling 'linkSpriteBounds' with all the error
+    // handling involved. Not that linked bounds do NOT move with the sprite, that's up to you.
+    // Linking is only done to more easily find a sprite from a bounds, and vice-versa.
     RcBounds * addSpriteBounds(RcSprite<InternalStateBytes> * sprite, float size, bool solid)
     {
         float halfsize = size / 2;
-        return this->addBounds((float)sprite->x - halfsize, (float)sprite->y - halfsize, (float)sprite->x + halfsize, (float)sprite->y + halfsize, solid);
+        RcBounds * result = this->addBounds((float)sprite->x - halfsize, (float)sprite->y - halfsize, (float)sprite->x + halfsize, (float)sprite->y + halfsize, solid);
+        if(result)
+        {
+            RcBounds * bounds = this->linkSpriteBounds(sprite, result);
+            if(bounds == NULL)
+            {
+                this->deleteBounds(result);
+                result = NULL;
+            }
+            else
+            {
+                result = bounds;
+            }
+        }
+        return result;
+    }
+
+    // Link a sprite and bounds together. This is only an "imaginary" link for use with finding sprites
+    // based on bounds, and does not impact anything else in the library. For instance, you still
+    // need to delete both sprite and bounds separately. This is a relatively expensive function
+    // (for these low powered systems), only call this when creating sprites! NO safety checks are
+    // performed; if you pass in a sprite or bounds that are not contained within this group, the
+    // results are undefined (and almost certainly broken!)
+    RcBounds * linkSpriteBounds(RcSprite<InternalStateBytes> * sprite, RcBounds * bounds)
+    {
+        uint8_t spriteIndex = sprite - this->sprites;
+        uint8_t oldBoundsIndex = bounds - this->bounds;
+        if(spriteIndex == oldBoundsIndex) return bounds;    // Already linked
+        if(this->numbounds <= spriteIndex) return NULL;     // Not enough space to 'link' the bounds
+        RcBounds existing = this->bounds[spriteIndex];
+        this->bounds[spriteIndex] = this->bounds[oldBoundsIndex];
+        this->bounds[oldBoundsIndex] = existing;
+        return &this->bounds[spriteIndex];
+    }
+
+    // If a sprite is linked to a bounds, get the sprite from the bounds. Note that the 
+    // functionality is undefined if the sprite + bounds are not linked (no check is performed)
+    RcSprite<InternalStateBytes> * getLinkedSprite(RcBounds * bounds)
+    {
+        return &this->sprites[bounds - this->bounds];
+    }
+
+    // If a sprite is linked to a bounds, get the bounds from the sprite. Note that 
+    // the functionality is undefined if the sprite + bounds are not linked
+    RcBounds * getLinkedBounds(RcSprite<InternalStateBytes> * sprite)
+    {
+        return &this->bounds[sprite - this->sprites];
     }
 
     void deleteBounds(RcBounds * bounds) { bounds->state = 0; }
     void deleteSprite(RcSprite<InternalStateBytes> * sprite) { sprite->state = 0; }
+    void deleteLinked(RcBounds * bounds) {
+        RcSprite<InternalStateBytes> * sprite = this->getLinkedSprite(bounds);
+        this->deleteSprite(sprite);
+        this->deleteBounds(bounds);
+    }
+    void deleteLinked(RcSprite<InternalStateBytes> * sprite) {
+        RcBounds * bounds = this->getLinkedBounds(sprite);
+        this->deleteSprite(sprite);
+        this->deleteBounds(bounds);
+    }
 
     //Get the first bounding box (in order of ID) which intersects this point. Optionally restrict 
     //by bounds that have a nonzero value with the statemask

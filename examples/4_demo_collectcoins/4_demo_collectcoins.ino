@@ -3,15 +3,23 @@
     you go around a map and collect coins. This will showcase:
     - Procedural map generation (using a maze generation algorithm)
     - Animated / moving sprites
-    - Removing sprites from the pool
+    - Linking sprites with bounding boxes
     - Collision detection with sprites
+    - Removing sprites from the pool
     - Nonstandard rendering widths (and how it increases performance)
     - Partial rendering instead of using arduboy.clear
 */
 #include <Arduboy2.h>
 #include <FixedPoints.h>
-#include <ArduboyRaycast.h>
 #include <ArduboyTones.h>
+
+// If you don't like how much space the program takes up, you could enable
+// this raycast feature to remove about 1200 bytes, but at the cost of
+// about 10-15% performance. It must be defined before including 
+// the raycast library for the first time.
+// #define RCSMALLLOOPS
+
+#include <ArduboyRaycast.h>
 
 // Include our maze generator. You can go look at the code but it's
 // not too important for our example, just know it generates a maze
@@ -25,15 +33,13 @@
 #include "coin_b.h"
 
 // Gameplay constants. You don't have to define these, but it's nice to have
-constexpr uint8_t FRAMERATE = 40; 
+constexpr uint8_t FRAMERATE = 35; 
 constexpr float MOVESPEED = 3.0f / FRAMERATE;
 constexpr float ROTSPEED = 3.25f / FRAMERATE;
 
-// Store the number of internal bytes we're using for user data within sprites to make 
-// it easier to write functions and pass around data types. We need to store a pointer
-// to a bounds, so the number of bytes should essentially become 2
-constexpr uint8_t NUMINTERNALBYTES = sizeof(RcBounds *);
-constexpr uint8_t COINBITFLAG = 0x80;
+// Since we're using this number so many times in template types, might 
+// as well make it a constant.
+constexpr uint8_t NUMINTERNALBYTES = 1;
 
 // Some constants for the coin sprite. If you look at the coin sprite itself,
 // you'll notice it's very small within its 16x16 frame. Sprites (currently)
@@ -42,6 +48,7 @@ constexpr uint8_t COINBITFLAG = 0x80;
 constexpr uint8_t COINBASEFRAME = 0;
 constexpr uint8_t COINSIZEINDEX = 2;
 constexpr int8_t COINBASEHEIGHT = 0;
+constexpr uint8_t COINBITFLAG = 0x80;
 
 // The number of coins we generate in the maze (required to win)
 constexpr uint8_t MAXNUMCOINS = 16;
@@ -61,8 +68,9 @@ const uint16_t winsong[] PROGMEM = {
 
 // We're going to generate 16 sprites and use EVERY slot. Also notice we're 
 // not using the full width, this will greatly increase performance (and we 
-// can use the unused width for something else). We're actually using some
-// of the internal state here, to store a pointer to the bounds for this coin
+// can use the unused width for something else). We still have no use for
+// sprite internal state (this could be used for things like enemy health,
+// maybe their velocity, etc).
 RcContainer<MAXNUMCOINS, NUMINTERNALBYTES, 100, HEIGHT> raycast(tilesheet, spritesheet, spritesheet_Mask);
 
 // Some globals for gameplay
@@ -83,8 +91,8 @@ ArduboyTones sound(arduboy.audio.enabled);
 // from the sprite animation example to create a frame animated, bobbing coin
 void coinAnimation(RcSprite<NUMINTERNALBYTES> * sprite)
 {
-    sprite->frame = currentCoinFrame; //COINBASEFRAME + ((arduboy.frameCount & 0b11000) >> 3);
-    sprite->setHeight(currentCoinHeight); //4 * sin(arduboy.frameCount / 6.0));
+    sprite->frame = currentCoinFrame; 
+    sprite->setHeight(currentCoinHeight);
 }
 
 // Since we're setting up "coins" a lot, let's make a function that
@@ -104,12 +112,12 @@ RcSprite<NUMINTERNALBYTES> * addCoin(uint8_t x, uint8_t y)
     // but it's important to know! I would say only the top 4 bits are safe in the state byte.
     bounds->state |= COINBITFLAG;
 
-    // This is important: you can use sprite internal state to link the bounds to the sprite.
-    // There are better ways to do this, this is just an example. We're copying the pointer for the
-    // bounds object into the internal state for the sprite. If we had more memory, I would provide 
-    // this functionality for you, but I just can't. I might add helper functions in the future which
-    // do this if for you only if asked if it's a common enough task (it might be)
-    memcpy(sprite->intstate, &bounds, sizeof(RcBounds *));
+    // Note that because we used "addSpriteBounds" instead of "addBounds" to create
+    // the bounds, the bounds are now linked to the sprite. This link is "imaginary"
+    // and isn't used for anything other than some of the "link" specific functions.
+    // I say it's "imaginary" because it's not stored anywhere (we don't have room)
+    // and the bounds don't move with the sprite, whether through the map or 
+    // through the sprite array.
 
     return sprite;
 }
@@ -133,8 +141,9 @@ void movement()
     float movement = 0;
     float rotation = 0;
 
-    // Simple movement forward and backward
-    if (arduboy.pressed(UP_BUTTON))
+    // Simple movement forward and backward. Might as well also let the user use B
+    // to move forward for "tank" controls
+    if (arduboy.pressed(UP_BUTTON) || arduboy.pressed(B_BUTTON))
         movement = MOVESPEED;
     if (arduboy.pressed(DOWN_BUTTON))
         movement = -MOVESPEED;
@@ -159,43 +168,22 @@ void testCoinCollection()
     if(bounds == NULL)
         return;
     
-    // Unfortunately, as of right now, bounding boxes themselves do not have internal storage,
-    // so we instead have to scan the sprites to find the one it's linked to. This may 
-    // change in the future. Also, if you don't need this flexibility, you could simply
-    // make sure the bounding boxes for sprites are stored at the SAME position within their
-    // array as the sprites. This is a more manual task but may be better in... well, most cases.
-    // Just wanted to show off how to use internal sprite data.
-    for(uint8_t i = 0; i < raycast.sprites.numsprites; i++)
+    // If a bounds was found, we collected that coin! 
+    foundCoins++;
+    if(foundCoins == MAXNUMCOINS)
     {
-        RcSprite<NUMINTERNALBYTES> * sprite = &raycast.sprites.sprites[i];
-
-        // Skip inactive sprites
-        if(!sprite->isActive()) continue;
-
-        // Pull the "pointer" out of the internal sprite data. There are shorter ways to do this
-        RcBounds * bptr;
-        memcpy(&bptr, sprite->intstate, sizeof(RcBounds *));
-
-        // This is our sprite, time to remove it! Also, since we know we hit a coin, let's 
-        // play a sound and increase the found counter
-        if(bptr == bounds)
-        {
-            foundCoins++;
-            if(foundCoins == MAXNUMCOINS)
-            {
-                sound.tones(winsong);
-                state = GameState::WinScreen;
-            }
-            else
-            {
-                sound.tone(500 + foundCoins * 10, 32, 700 + foundCoins * 10, 32);
-            }
-            sprite->setActive(false); //This immediately removes the sprite from the pool
-            bounds->setActive(false);
-            drawInventory();
-            break;
-        }
+        sound.tones(winsong);
+        state = GameState::WinScreen;
     }
+    else
+    {
+        sound.tone(500 + foundCoins * 10, 32, 700 + foundCoins * 10, 32);
+    }
+    
+    // This removes both the sprite and the bounds data, but only if they were linked 
+    // (they are, because we called 'addSpriteBounds')
+    raycast.sprites.deleteLinked(bounds);
+    drawInventory();
 }
 
 
@@ -245,22 +233,12 @@ void generateNew()
         // Oops, this is the player position!
         if(rndx == raycast.player.posX.getInteger() && rndy == raycast.player.posY.getInteger())
             continue;
-        
-        bool overlapping = false;
 
-        // Scan the sprite array to see if we overlap other coins slots
-        for(uint8_t i = 0; i < raycast.sprites.numsprites; i++)
-        {
-            RcSprite<NUMINTERNALBYTES> * sprite = &raycast.sprites.sprites[i];
-            if(sprite->isActive() && sprite->x.getInteger() == rndx && sprite->y.getInteger() == rndy)
-            {
-                overlapping = true;
-                continue;
-            }
-        }
-
-        // OK, we finally found a good place!
-        if(!overlapping)
+        // Rather than scanning the sprite array ourselves, let's take advantage of 
+        // the collision detection and just see if the center of the cell is colliding 
+        // with another coin (to prevent coins spawning on top of each other). 
+        // If not, it's safe to add the coin!
+        if(!raycast.sprites.firstColliding(rndx + 0.5, rndy + 0.5, COINBITFLAG))
         {
             addCoin(rndx, rndy);
             coins_generated++;
