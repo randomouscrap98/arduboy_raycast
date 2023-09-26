@@ -159,6 +159,7 @@ public:
     {
         uint8_t pmapX = p->posX.getInteger();
         uint8_t pmapY = p->posY.getInteger();
+        uint8_t startMapIndex = map->getIndex(pmapX, pmapY);
         uflot pmapofsX = p->posX - pmapX;
         uflot pmapofsY = p->posY - pmapY;
         flot fposX = (flot)p->posX, fposY = (flot)p->posY;
@@ -221,8 +222,9 @@ public:
             }
 
             uint8_t side;           // was a NS or a EW wall hit?
-            uint8_t mapIndex = map->getIndex(pmapX, pmapY);
+            uint8_t mapIndex = startMapIndex;
             uflot perpWallDist = 0;   // perpendicular distance (not real distance)
+            uint8_t tile;
 
             // perform DDA. A do/while loop is ever-so-slightly faster it seems?
             do
@@ -240,15 +242,16 @@ public:
                     mapIndex += stepY;
                     side = 1; //1 = yside hit
                 }
+                tile = map->map[mapIndex];
             }
-            while (perpWallDist < viewdistance && map->map[mapIndex] == RCEMPTY);
+            while (perpWallDist < viewdistance && tile == RCEMPTY);
 
             //Only calc distance for every other point to save a lot of memory (100 bytes)
             if((x & 1) == 0)
                 distCache[x >> 1] = perpWallDist;
 
             // If the above loop was exited without finding a tile, there's nothing to draw
-            if(map->map[mapIndex] == RCEMPTY) continue;
+            if(tile == RCEMPTY) continue;
 
             //NOTE: wallX technically can only be positive, but I'm using flot to save a tiny amount from casting
             flot wallX = side ? fposX + (flot)perpWallDist * rayDirX : fposY + (flot)perpWallDist * rayDirY;
@@ -259,7 +262,7 @@ public:
             if((side & x) && this->altWallShading != RcShadingType::None)
                 texData = this->altWallShading == RcShadingType::Black ? 0x0000 : 0xFFFF;
             else
-                texData = readTextureStrip16(tilesheet, map->map[mapIndex], texX);
+                texData = readTextureStrip16(tilesheet, tile, texX);
 
             #ifdef RCLINEHEIGHTDEBUG
             tinyfont.setCursor(16, x * 16);
