@@ -27,6 +27,12 @@ constexpr uint8_t b_shading[] PROGMEM = {
     0x44, 0x00, 0x00, 0x00, // 14
 };
 
+// It's ridiculous that it's faster to read this from memory than to simply left/right shift...
+constexpr uint8_t shade_mask[] PROGMEM = {
+    0b11111111, 0b11111110, 0b11111100, 0b11111000, 0b11110000, 0b11100000, 0b11000000, 0b10000000,
+    //0b11111111, 0b00000001, 0b00000011, 0b00000111, 0b00001111, 0b00011111, 0b00111111, 0b01111111
+};
+
 // Compute the shading byte for the given distance and x value
 inline uint8_t calcShading(uflot perpWallDist, uint8_t x, const uflot DARKNESS)
 {

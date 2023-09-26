@@ -282,7 +282,7 @@ public:
 
     //Draw a single raycast wall line. Will only draw specifically the wall line and will clip out all the rest
     //(so you can predraw a ceiling and floor before calling raycast)
-    void drawWallLine(uint8_t x, uflot distance, RcShadeInfo shade, uint16_t texData, Arduboy2Base * arduboy)
+    void drawWallLine(uint8_t x, uflot distance, RcShadeInfo shading, uint16_t texData, Arduboy2Base * arduboy)
     {
         // ------- BEGIN CRITICAL SECTION -------------
         float invLineHeight = INVHEIGHT * (float)distance; 
@@ -302,6 +302,7 @@ public:
         uint8_t texByte;
         uint8_t thisWallByte = (((yStart >> 1) >> 1) >> 1);
         uint8_t * sbuffer = arduboy->sBuffer;
+        uint8_t shade = shading.shading;
 
         uint8_t fullstep = step.getInteger();
         uint8_t accustep = (step.getFraction() >> 8);
@@ -311,7 +312,7 @@ public:
         //Pull wall byte, save location
         #define _WALLREADBYTE() bofs = thisWallByte * WIDTH + x; texByte = sbuffer[bofs];
         //Write previously read wall byte, go to next byte
-        #define _WALLWRITENEXT(mixin) if(shade.type == RcShadingType::Black) { sbuffer[bofs] = (texByte & shade.shading) mixin; } else { sbuffer[bofs] = (texByte | shade.shading) mixin;} thisWallByte++;
+        #define _WALLWRITENEXT(mixin) if(shading.type == RcShadingType::Black) { sbuffer[bofs] = (texByte & shade) mixin; } else { sbuffer[bofs] = (texByte | shade) mixin;} thisWallByte++;
         //Work for setting bits of wall byte. Use an imperfect overflow accumulator to approximate stepping through texture.
         #define _WALLBITUNROLL(bm,nbm) \
             if(texData & 1) texByte |= (bm); \
@@ -337,11 +338,13 @@ public:
         uint8_t startByte = thisWallByte; //The byte within which we start, always inclusive
         uint8_t endByte = (((yEnd >> 1) >> 1) >> 1);  //The byte to end the unrolled loop on. Could be inclusive or exclusive
 
+        uint8_t yofs = yStart & 7;
+
         //First and last bytes are tricky
-        if(yStart & 7)
+        if(yofs)
         {
             uint8_t endFirst = min((startByte + 1) * 8, yEnd);
-            uint8_t bm = fastlshift8(yStart & 7);
+            uint8_t bm = fastlshift8(yofs);
 
             for (uint8_t i = yStart; i < endFirst; i++)
             {
@@ -349,9 +352,12 @@ public:
                 bm <<= 1;
             }
 
-            //Move to next, like it never happened
+            //Move to next, like it never happened (but mask shading)
+            if(shading.type == RcShadingType::White)
+                shade &= pgm_read_byte(shade_mask + yofs);
             _WALLWRITENEXT();
             _WALLREADBYTE();
+            shade = shading.shading;
         }
 
         // Now the unrolled loop
@@ -369,11 +375,12 @@ public:
             _WALLREADBYTE();
         }
 
+        yofs = yEnd & 7;
         //Last byte, but only need to do it if we don't simply span one byte
-        if((yEnd & 7) && startByte != endByte)
+        if(yofs && startByte != endByte)
         {
             uint8_t endStart = thisWallByte * 8;
-            uint8_t bm = fastlshift8(endStart & 7);
+            uint8_t bm = 1;
             for (uint8_t i = endStart; i < yEnd; i++)
             {
                 _WALLBITUNROLL(bm, (~bm));
@@ -382,7 +389,9 @@ public:
 
             //"Don't repeat yourself": that ship has sailed. Anyway, only write the last byte if we need to, otherwise
             //we could legitimately write outside the bounds of the screen.
-            if(cornershading) { _WALLWRITENEXT(& ~(fastlshift8(yEnd & 7))); }
+            if(shading.type == RcShadingType::White)
+                shade &= ~pgm_read_byte(shade_mask + yofs);
+            if(cornershading) { _WALLWRITENEXT(& ~(fastlshift8(yofs))); }
             else { _WALLWRITENEXT(); }
         }
 
