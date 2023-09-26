@@ -10,19 +10,12 @@
 #include "ArduboyRaycast_Shading.h"
 
 // Available flags for compilation
-// #define RCNOCORNERSHADOWS      // Remove the corner shadows (used to increase readability of walls against floor)
-// #define RCWHITEFOG             // Make distance shading white instead of black
-// #define RCNOALTWALLSHADING     // Perpendicular walls are half-shaded to increase readability, this removes that
 // #define RCSMALLLOOPS           // The raycaster makes use of loop unrolling, which adds about 1.5kb code. This removes that but performance severely drops
 
 // Debug flags 
 // #define RCGENERALDEBUG       // Must be set for any of the othere to work
 // #define RCLINEHEIGHTDEBUG      // Display information about lineheight (only draws a few lines)
 // #define RCPRINTSPRITEDATA      // Display information about certain sprite-related properties
-
-#ifndef RCWALLSHADING
-#define RCWALLSHADING 1           // 0 = no wall shading, 1 = shading, 2 = half resolution shading. "LIGHTINTENSITY" still affects draw distance regardless
-#endif
 
 #ifdef RCGENERALDEBUG
 #include <Tinyfont.h>
@@ -45,7 +38,6 @@ struct RcSpriteDrawPrecalc
     float invDet;
 };
 
-
 // A container for calculated sprite draw data. You know a calculation was not performed
 // if stepX and stepY are 0
 struct RcSpriteDrawData
@@ -63,6 +55,18 @@ struct RcSpriteDrawData
     uflot transformY;
 };
 
+enum RcShadingType : uint8_t
+{
+    None,
+    Black,
+    White
+};
+
+struct RcShadeInfo
+{
+    uint8_t shading;
+    RcShadingType type;
+};
 
 // Raycast renderer container, tracks data used for raycasting + lets you render raycasting
 template<uint8_t W, uint8_t H>
@@ -86,6 +90,10 @@ public:
     const uint8_t * spritesheet = NULL;
     const uint8_t * spritesheet_mask = NULL;
     muflot spritescaling[4] = { 1.5, 1.0, 0.5, 0.25 };
+
+    uint8_t cornershading = 1;
+    RcShadingType shading = RcShadingType::Black;
+    RcShadingType altWallShading = RcShadingType::Black;
 
     // I want these to be private but they're needed elsewhere
     uflot _viewdistance = 4.0;      // Calculated value
@@ -111,6 +119,28 @@ public:
             memcpy_P(arduboy->sBuffer + i * WIDTH, bg + i * VIEWWIDTH, VIEWWIDTH);
     }
 
+    // Calculate the appropriate shading for this wall slice given our rendering config
+    inline RcShadeInfo calculateShading(uflot distance, uint8_t x)
+    {
+        if(this->shading == RcShadingType::None)
+        {
+            return RcShadeInfo {
+                0xFF,
+                RcShadingType::Black
+            };
+        }
+        else
+        {
+            RcShadeInfo result {
+                calcShading(distance, x, this->_darkness),
+                this->shading
+            };
+            if(this->shading == RcShadingType::White)
+                result.shading = ~result.shading;
+            return result;
+        }
+    }
+
     // Set the light intensity for raycasting. Performs several expensive calculations, only set this
     // when necessary
     void setLightIntensity(uflot intensity)
@@ -134,16 +164,12 @@ public:
         flot fposX = (flot)p->posX, fposY = (flot)p->posY;
         flot dX = p->dirX, dY = p->dirY;
         const uint8_t * tilesheet = this->tilesheet;
-        uflot darkness = this->_darkness;
         uflot viewdistance = this->_viewdistance;
         uflot * distCache = this->_distCache;
 
-        uint8_t shade = 0;
+        RcShadeInfo shade;
         uint8_t texX = 0;
         uint16_t texData = 0;
-
-        uint8_t lastTile = RCEMPTY;
-        uint8_t lastTexX = 0;
 
         for (uint8_t x = 0; x < VIEWWIDTH; x++)
         {
@@ -225,25 +251,7 @@ public:
             if((x & 1) == 0)
             {
                 distCache[x >> 1] = perpWallDist;
-
-                #if RCWALLSHADING == 2
-                //Since we're in here anyway, do the half-res shading too (if requested)
-                shade = calcShading(perpWallDist, x, darkness);
-                #endif
             }
-
-            #if RCWALLSHADING == 1
-            //Full res shading happens every frame of course
-            shade = calcShading(perpWallDist, x, darkness);
-            #elif RCWALLSHADING == 0
-            //If you're not having any wall shading, it's always fully set
-            shade = 0xFF;
-            #endif
-
-            #ifndef RCNOALTWALLSHADING
-            //Every other row of alt walls get no shading to make them easier to read
-            if(side & x) shade = 0;
-            #endif
 
             // If the above loop was exited without finding a tile, there's nothing to draw
             if(tile == RCEMPTY) continue;
@@ -254,17 +262,10 @@ public:
             texX = uint8_t(wallX * RCTILESIZE);
             if((side == 0 && rayDirX > 0) || (side == 1 && rayDirY < 0)) texX = RCTILESIZE - 1 - texX;
 
-            //Loading the texture is more expensive than this if statement
-            if(tile != lastTile || texX != lastTexX)
-            {
+            if((side & x) && this->altWallShading != RcShadingType::None)
+                texData = this->altWallShading == RcShadingType::Black ? 0x0000 : 0xFFFF;
+            else
                 texData = readTextureStrip16(tilesheet, tile, texX);
-                lastTile = tile;
-                lastTexX = texX;
-            }
-
-            // Calculate half height of line to draw on screen. We already know the distance to the wall.
-            // We can truncate the total height if too close to the wall right here and now and avoid future checks.
-            //uint16_t lineHeight = (perpWallDist <= MINLDISTANCE) ? MAXLHEIGHT : (VIEWHEIGHT / (float)perpWallDist);
 
             #ifdef RCLINEHEIGHTDEBUG
             tinyfont.setCursor(16, x * 16);
@@ -275,13 +276,13 @@ public:
             #endif
 
             //ending should be exclusive
-            drawWallLine(x, perpWallDist, shade, texData, arduboy);
+            drawWallLine(x, perpWallDist, this->calculateShading(perpWallDist, x), texData, arduboy);
         }
     }
 
     //Draw a single raycast wall line. Will only draw specifically the wall line and will clip out all the rest
     //(so you can predraw a ceiling and floor before calling raycast)
-    void drawWallLine(uint8_t x, uflot distance, uint8_t shade, uint16_t texData, Arduboy2Base * arduboy)
+    void drawWallLine(uint8_t x, uflot distance, RcShadeInfo shade, uint16_t texData, Arduboy2Base * arduboy)
     {
         // ------- BEGIN CRITICAL SECTION -------------
         float invLineHeight = INVHEIGHT * (float)distance; 
@@ -307,20 +308,13 @@ public:
         uint8_t accum = (texPos.getFraction() >> 8);
         texData >>= texPos.getInteger();
 
-        // Different kind of shade check for white fog
-        #ifdef RCWHITEFOG
-        #define _WALLSHADECHECK(bm) !(shade & (bm)) ||
-        #else
-        #define _WALLSHADECHECK(bm) (shade & (bm)) &&
-        #endif
-
         //Pull wall byte, save location
         #define _WALLREADBYTE() bofs = thisWallByte * WIDTH + x; texByte = sbuffer[bofs];
         //Write previously read wall byte, go to next byte
-        #define _WALLWRITENEXT() sbuffer[bofs] = texByte; thisWallByte++;
+        #define _WALLWRITENEXT(mixin) if(shade.type == RcShadingType::Black) { sbuffer[bofs] = (texByte & shade.shading) mixin; } else { sbuffer[bofs] = (texByte | shade.shading) mixin;} thisWallByte++;
         //Work for setting bits of wall byte. Use an imperfect overflow accumulator to approximate stepping through texture.
         #define _WALLBITUNROLL(bm,nbm) \
-            if(_WALLSHADECHECK(bm) (texData & 1)) texByte |= (bm); \
+            if(texData & 1) texByte |= (bm); \
             else texByte &= (nbm); \
             asm volatile( \
                 "add %[accum], %[step]    \n" \
@@ -388,11 +382,8 @@ public:
 
             //"Don't repeat yourself": that ship has sailed. Anyway, only write the last byte if we need to, otherwise
             //we could legitimately write outside the bounds of the screen.
-            #ifndef RCNOCORNERSHADOWS
-            sbuffer[bofs] = texByte & ~(fastlshift8(yEnd & 7));
-            #else
-            sbuffer[bofs] = texByte;
-            #endif
+            if(cornershading) { _WALLWRITENEXT(& ~(fastlshift8(yEnd & 7))); }
+            else { _WALLWRITENEXT(); }
         }
 
         #else // No loop unrolling
@@ -418,14 +409,8 @@ public:
         }
         while(++yStart < yEnd);
 
-        //The above loop specifically can't end where bidx = 0 and thus placing us outside the writable area. 
-        //Note that corner shadows are SLIGHTLY different between loop unrolled and not: we MUST move yEnd up,
-        //but the previous does not, giving perhaps a better effect
-        #ifndef RCNOCORNERSHADOWS
-        sbuffer[bofs] = texByte & ~(fastlshift8((yEnd - 1) & 7));
-        #else
-        sbuffer[bofs] = texByte;
-        #endif
+        if(cornershading) { _WALLWRITENEXT(& ~(fastlshift8(yEnd & 7))); }
+        else { _WALLWRITENEXT(); }
 
         #endif
 
