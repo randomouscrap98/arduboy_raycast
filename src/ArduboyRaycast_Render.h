@@ -418,7 +418,7 @@ public:
         }
         while(++yStart < yEnd);
 
-        if(cornershading) { _WALLWRITENEXT(& ~(fastlshift8(yEnd & 7))); }
+        if(cornershading && yEnd != VIEWHEIGHT) { _WALLWRITENEXT(& ~(fastlshift8(yEnd & 7))); }
         else { _WALLWRITENEXT(); }
 
         #endif
