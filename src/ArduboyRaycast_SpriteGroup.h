@@ -16,7 +16,7 @@ public:
 
     RcSprite<InternalStateBytes> * operator[](uint8_t index)
     {
-        return this->sprites[index];
+        return &this->sprites[index];
     }
 
     void resetSprites()
@@ -46,6 +46,17 @@ public:
             
             if(sprite->behavior)
                 sprite->behavior(sprite);
+        }
+    }
+
+    // Run a common function against all active sprites.
+    void runSpritesCommon(void (* func)(RcSprite<InternalStateBytes> *))
+    {
+        uint8_t numsprites = this->numsprites;
+        for(uint8_t i = 0; i < numsprites; i++)
+        {
+            if(this->sprites[i].isActive())
+                func(&this->sprites[i]);    
         }
     }
 
