@@ -211,20 +211,18 @@ public:
             if(deltaDistY > NEARZEROFIXED) {
                 deltaDistY = uReciprocalNearUnit(deltaDistY); 
                 if (rayDirY < 0) {
-                    stepY = -1;
+                    stepY = -map->width;
                     sideDistY = pmapofsY * deltaDistY;
                 }
                 else {
-                    stepY = 1;
+                    stepY = map->width;
                     sideDistY = (1 - pmapofsY) * deltaDistY;
                 }
             }
 
             uint8_t side;           // was a NS or a EW wall hit?
-            uint8_t mapX = pmapX;   // which box of the map the ray collision is in
-            uint8_t mapY = pmapY;
+            uint8_t mapIndex = map->getIndex(pmapX, pmapY);
             uflot perpWallDist = 0;   // perpendicular distance (not real distance)
-            uint8_t tile = RCEMPTY;   // tile that was hit by ray
 
             // perform DDA. A do/while loop is ever-so-slightly faster it seems?
             do
@@ -233,28 +231,24 @@ public:
                 if (sideDistX < sideDistY) {
                     perpWallDist = sideDistX; // Remember that sideDist is actual distance and not distance only in 1 direction
                     sideDistX += deltaDistX;
-                    mapX += stepX;
+                    mapIndex += stepX;
                     side = 0; //0 = xside hit
                 }
                 else {
                     perpWallDist = sideDistY;
                     sideDistY += deltaDistY;
-                    mapY += stepY;
+                    mapIndex += stepY;
                     side = 1; //1 = yside hit
                 }
-                // Check if ray has hit a wall
-                tile = map->getCell(mapX, mapY);
             }
-            while (perpWallDist < viewdistance && tile == RCEMPTY);
+            while (perpWallDist < viewdistance && map->map[mapIndex] == RCEMPTY);
 
             //Only calc distance for every other point to save a lot of memory (100 bytes)
             if((x & 1) == 0)
-            {
                 distCache[x >> 1] = perpWallDist;
-            }
 
             // If the above loop was exited without finding a tile, there's nothing to draw
-            if(tile == RCEMPTY) continue;
+            if(map->map[mapIndex] == RCEMPTY) continue;
 
             //NOTE: wallX technically can only be positive, but I'm using flot to save a tiny amount from casting
             flot wallX = side ? fposX + (flot)perpWallDist * rayDirX : fposY + (flot)perpWallDist * rayDirY;
@@ -265,7 +259,7 @@ public:
             if((side & x) && this->altWallShading != RcShadingType::None)
                 texData = this->altWallShading == RcShadingType::Black ? 0x0000 : 0xFFFF;
             else
-                texData = readTextureStrip16(tilesheet, tile, texX);
+                texData = readTextureStrip16(tilesheet, map->map[mapIndex], texX);
 
             #ifdef RCLINEHEIGHTDEBUG
             tinyfont.setCursor(16, x * 16);
