@@ -22,7 +22,7 @@
 
 
 // Gameplay constants. You don't have to define these, but it's nice to have
-constexpr uint8_t FRAMERATE = 35;
+constexpr uint8_t FRAMERATE = 30; // Too many sprites + fullscreen for 35
 constexpr float MOVESPEED = 2.25f / FRAMERATE;
 constexpr float ROTSPEED = 3.0f / FRAMERATE;
 
@@ -138,7 +138,7 @@ void loadArea(uint8_t area)
     for(uint8_t i = 0; i < 255; i++)
     {
         SpriteInfo spinfo;
-        memcpy_P(&spinfo, map.SpriteData + i, sizeof(LoadingZone));
+        memcpy_P(&spinfo, map.SpriteData + i, sizeof(SpriteInfo));
         if(spinfo.X == 0 && spinfo.Y == 0) break; // The special ending zone
 
         RcSprite<NUMINTERNALBYTES> * sprite = raycast.sprites.addSprite(spinfo.X, spinfo.Y, spinfo.Frame, spinfo.Size, spinfo.Height, NULL);
@@ -168,6 +168,12 @@ void setup()
 {
     arduboy.begin();
     arduboy.setFrameRate(FRAMERATE); 
+
+    //Assign custom sizes for scaling
+    raycast.render.spritescaling[0] = 1.0;
+    raycast.render.spritescaling[1] = 0.8;
+    raycast.render.spritescaling[2] = 0.6;
+    raycast.render.spritescaling[3] = 0.4;
 
     loadArea(0);
 }
