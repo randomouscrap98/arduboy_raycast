@@ -297,7 +297,8 @@ public:
         //These four variables are needed as part of the loop unrolling system
         uint16_t bofs;
         uint8_t texByte;
-        uint8_t thisWallByte = (((yStart >> 1) >> 1) >> 1);
+        uint8_t thisWallByte = yStart;
+        TOBYTECOUNT(thisWallByte);
         uint8_t * sbuffer = arduboy->sBuffer;
         uint8_t shade = shading.shading;
 
@@ -333,7 +334,8 @@ public:
         #ifndef RCSMALLLOOPS
 
         uint8_t startByte = thisWallByte; //The byte within which we start, always inclusive
-        uint8_t endByte = (((yEnd >> 1) >> 1) >> 1);  //The byte to end the unrolled loop on. Could be inclusive or exclusive
+        uint8_t endByte = yEnd;
+        TOBYTECOUNT(endByte);
 
         uint8_t yofs = yStart & 7;
 
@@ -450,15 +452,16 @@ public:
         if (transformYT < MINSPRITEDISTANCE)
             return result;
 
+        float invTransformYT = 1 / transformYT;
         float transformXT = calc->invDet * (player->dirY * spriteX - player->dirX * spriteY);
 
         // int16 because easy overflow! if x is much larger than y, then you're effectively multiplying 50 by map width.
         //  NOTE: this is the CENTER of the sprite, not the edge (thankfully)
-        int16_t spriteScreenX = int16_t(MIDSCREENX * (1 + transformXT / transformYT));
+        int16_t spriteScreenX = int16_t(MIDSCREENX * (1 + transformXT * invTransformYT));
 
         // calculate the dimensions of the sprite on screen. All sprites are square. Size mods go here
         // using 'transformY' instead of the real distance prevents fisheye
-        uint16_t spriteHeight = uint16_t(VIEWHEIGHT / transformYT * (float)this->spritescaling[(sprite->state & RSSTATESIZE) >> 1]);
+        uint16_t spriteHeight = uint16_t(VIEWHEIGHT * invTransformYT * (float)this->spritescaling[(sprite->state & RSSTATESIZE) >> 1]);
         uint16_t spriteWidth = spriteHeight;
 
         // calculate lowest and highest pixel to fill. Sprite screen/start X and Sprite screen/start Y
@@ -471,8 +474,9 @@ public:
             return result;
 
         // Calculate vertical shift from top 5 bits of state
-        uint8_t yShiftBits = ((sprite->state >> 1) >> 1) >> 1;
-        int16_t yShift = yShiftBits ? int16_t((yShiftBits & 16 ? -(yShiftBits & 15) : (yShiftBits & 15)) * 2.0 / transformYT) : 0;
+        uint8_t yShiftBits = sprite->state;
+        TOBYTECOUNT(yShiftBits); //((sprite->state >> 1) >> 1) >> 1;
+        int16_t yShift = yShiftBits ? int16_t((yShiftBits & 16 ? -(yShiftBits & 15) : (yShiftBits & 15)) * 2.0 * invTransformYT) : 0;
         // The above didn't work without float math, didn't feel like figuring out the ridiculous type casting
 
         int16_t ssY = -(spriteHeight >> 1) + MIDSCREENY + yShift;
@@ -545,8 +549,10 @@ public:
             uflot texX = drawData.texXInit;
             uint8_t fr = sprite->frame;
 
-            uint8_t drawStartByte = (((drawData.drawStartY >> 1) >> 1) >> 1); //right shift 3 without loop
-            uint8_t drawEndByte = (((drawData.drawEndY >> 1) >> 1) >> 1);  //The byte to end the unrolled loop on. Could be inclusive or exclusive
+            uint8_t drawStartByte = drawData.drawStartY;
+            TOBYTECOUNT(drawStartByte); //(((drawData.drawStartY >> 1) >> 1) >> 1); //right shift 3 without loop
+            uint8_t drawEndByte = drawData.drawEndY;
+            TOBYTECOUNT(drawEndByte); //(((drawData.drawEndY >> 1) >> 1) >> 1);  //The byte to end the unrolled loop on. Could be inclusive or exclusive
             uint16_t texData = 0;
             uint16_t texMask = 0;
 

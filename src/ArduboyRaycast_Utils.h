@@ -138,6 +138,8 @@ flot fReciprocalNearUnitNoSign(flot x)
         return flot::fromInternal(pgm_read_word(DIVISORS + (x.getInternal() & 0xFF)));
 }
 
+#define TOBYTECOUNT(bitcount) asm volatile("lsr %0\nlsr %0\nlsr %0" : "+r" (bitcount))
+
 // IDK just wanted to see lol
 //float q_rsqrt(float number)
 //{
