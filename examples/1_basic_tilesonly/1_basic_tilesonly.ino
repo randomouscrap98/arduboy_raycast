@@ -7,7 +7,7 @@
 #include "tilesheet.h"
 
 // Gameplay constants. You don't have to define these, but it's nice to have
-constexpr uint8_t FRAMERATE = 30;   //30 is a safe number for raycasting
+constexpr uint8_t FRAMERATE = 35;   //35 is a safe number for fullscreen raycasting (no sprites)
 constexpr float MOVESPEED = 3.5f / FRAMERATE;
 constexpr float ROTSPEED = 3.5f / FRAMERATE;
 

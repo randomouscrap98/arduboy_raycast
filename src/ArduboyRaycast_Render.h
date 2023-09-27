@@ -354,6 +354,8 @@ public:
             //Move to next, like it never happened (but mask shading)
             if(shading.type == RcShadingType::White)
                 shade &= pgm_read_byte(shade_mask + yofs);
+            else
+                shade |= ~pgm_read_byte(shade_mask + yofs);
             _WALLWRITENEXT();
             _WALLREADBYTE();
             shade = shading.shading;
@@ -390,6 +392,8 @@ public:
             //we could legitimately write outside the bounds of the screen.
             if(shading.type == RcShadingType::White)
                 shade &= ~pgm_read_byte(shade_mask + yofs);
+            else
+                shade |= pgm_read_byte(shade_mask + yofs);
             if(cornershading) { _WALLWRITENEXT(& ~(fastlshift8(yofs))); }
             else { _WALLWRITENEXT(); }
         }

@@ -33,7 +33,7 @@
 #include "coin_b.h"
 
 // Gameplay constants. You don't have to define these, but it's nice to have
-constexpr uint8_t FRAMERATE = 35; 
+constexpr uint8_t FRAMERATE = 35; // With the smaller screen, we can increase the fps even with all the sprites
 constexpr float MOVESPEED = 3.0f / FRAMERATE;
 constexpr float ROTSPEED = 3.25f / FRAMERATE;
 
