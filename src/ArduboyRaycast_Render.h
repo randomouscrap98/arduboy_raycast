@@ -324,9 +324,7 @@ public:
                 : [accum] "+&r" (accum), \
                   [td] "+&r" (texData)    \
                 : [step] "r" (accustep) \
-            ); //\
-            //post
-            //if(fullstep) { texData >>= fullstep; }
+            ); 
         
         // The above volatile section is a special fractional accumulator which uses the carry bit to determine
         // if an additional right shift of the texture is in order
@@ -465,6 +463,7 @@ public:
             }
 
             _WALLBITUNROLL(bm, ~bm);
+            if(fullstep) { texData >>= fullstep; }
             bm <<= 1;
         }
         while(++yStart < yEnd);
