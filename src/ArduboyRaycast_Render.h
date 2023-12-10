@@ -324,8 +324,9 @@ public:
                 : [accum] "+&r" (accum), \
                   [td] "+&r" (texData)    \
                 : [step] "r" (accustep) \
-            ); \
-            if(fullstep) { texData >>= fullstep; }
+            ); //\
+            //post
+            //if(fullstep) { texData >>= fullstep; }
         
         // The above volatile section is a special fractional accumulator which uses the carry bit to determine
         // if an additional right shift of the texture is in order
@@ -346,10 +347,20 @@ public:
             uint8_t endFirst = min((startByte + 1) * 8, yEnd);
             uint8_t bm = fastlshift8(yofs);
 
-            for (uint8_t i = yStart; i < endFirst; i++)
+            if(fullstep)
             {
-                _WALLBITUNROLL(bm, (~bm));
-                bm <<= 1;
+                for (uint8_t i = yStart; i < endFirst; i++) {
+                    _WALLBITUNROLL(bm, (~bm));
+                    texData >>= fullstep;
+                    bm <<= 1;
+                }
+            }
+            else
+            {
+                for (uint8_t i = yStart; i < endFirst; i++) {
+                    _WALLBITUNROLL(bm, (~bm));
+                    bm <<= 1;
+                }
             }
 
             //Move to next, like it never happened (but mask shading)
@@ -363,18 +374,45 @@ public:
         }
 
         // Now the unrolled loop
-        while (thisWallByte < endByte)
+        if(fullstep)
         {
-            _WALLBITUNROLL(0b00000001, 0b11111110);
-            _WALLBITUNROLL(0b00000010, 0b11111101);
-            _WALLBITUNROLL(0b00000100, 0b11111011);
-            _WALLBITUNROLL(0b00001000, 0b11110111);
-            _WALLBITUNROLL(0b00010000, 0b11101111);
-            _WALLBITUNROLL(0b00100000, 0b11011111);
-            _WALLBITUNROLL(0b01000000, 0b10111111);
-            _WALLBITUNROLL(0b10000000, 0b01111111);
-            _WALLWRITENEXT();
-            _WALLREADBYTE();
+            while (thisWallByte < endByte)
+            {
+                _WALLBITUNROLL(0b00000001, 0b11111110);
+                    texData >>= fullstep;
+                _WALLBITUNROLL(0b00000010, 0b11111101);
+                    texData >>= fullstep;
+                _WALLBITUNROLL(0b00000100, 0b11111011);
+                    texData >>= fullstep;
+                _WALLBITUNROLL(0b00001000, 0b11110111);
+                    texData >>= fullstep;
+                _WALLBITUNROLL(0b00010000, 0b11101111);
+                    texData >>= fullstep;
+                _WALLBITUNROLL(0b00100000, 0b11011111);
+                    texData >>= fullstep;
+                _WALLBITUNROLL(0b01000000, 0b10111111);
+                    texData >>= fullstep;
+                _WALLBITUNROLL(0b10000000, 0b01111111);
+                    texData >>= fullstep;
+                _WALLWRITENEXT();
+                _WALLREADBYTE();
+            }
+        }
+        else
+        {
+            while (thisWallByte < endByte)
+            {
+                _WALLBITUNROLL(0b00000001, 0b11111110);
+                _WALLBITUNROLL(0b00000010, 0b11111101);
+                _WALLBITUNROLL(0b00000100, 0b11111011);
+                _WALLBITUNROLL(0b00001000, 0b11110111);
+                _WALLBITUNROLL(0b00010000, 0b11101111);
+                _WALLBITUNROLL(0b00100000, 0b11011111);
+                _WALLBITUNROLL(0b01000000, 0b10111111);
+                _WALLBITUNROLL(0b10000000, 0b01111111);
+                _WALLWRITENEXT();
+                _WALLREADBYTE();
+            }
         }
 
         yofs = yEnd & 7;
@@ -382,10 +420,20 @@ public:
         if(yofs && startByte != endByte)
         {
             uint8_t bm = 1;
-            for (uint8_t i = thisWallByte * 8; i < yEnd; i++)
+            if(fullstep)
             {
-                _WALLBITUNROLL(bm, (~bm));
-                bm <<= 1;
+                for (uint8_t i = thisWallByte * 8; i < yEnd; i++) {
+                    _WALLBITUNROLL(bm, (~bm));
+                    texData >>= fullstep;
+                    bm <<= 1;
+                }
+            }
+            else
+            {
+                for (uint8_t i = thisWallByte * 8; i < yEnd; i++) {
+                    _WALLBITUNROLL(bm, (~bm));
+                    bm <<= 1;
+                }
             }
 
             //"Don't repeat yourself": that ship has sailed. Anyway, only write the last byte if we need to, otherwise
