@@ -84,6 +84,7 @@ public:
     static constexpr uint16_t MAXLHEIGHT = 32768;
     static constexpr float MINLDISTANCE = 1.0f / MAXLHEIGHT;
     static constexpr float MINSPRITEDISTANCE = 0.2;
+    static constexpr uflot SPRITEVIEWEXENTSION = 0.5;
 
     uflot lightintensity = 1.0;     // Impacts view distance + shading even when no shading applied
     const uint8_t * tilesheet = NULL;
@@ -380,9 +381,8 @@ public:
         //Last byte, but only need to do it if we don't simply span one byte
         if(yofs && startByte != endByte)
         {
-            uint8_t endStart = thisWallByte * 8;
             uint8_t bm = 1;
-            for (uint8_t i = endStart; i < yEnd; i++)
+            for (uint8_t i = thisWallByte * 8; i < yEnd; i++)
             {
                 _WALLBITUNROLL(bm, (~bm));
                 bm <<= 1;
@@ -452,8 +452,8 @@ public:
 
         float transformYT = calc->invDet * (player->dirX * spriteX + player->dirY * spriteY); // this is actually the depth inside the screen, that what Z is in 3D
 
-        // Nice quick shortcut to get out for sprites behind us (and ones that are too close)
-        if (transformYT < MINSPRITEDISTANCE)
+        // Nice quick shortcut to get out for sprites behind us (and ones that are too close / far)
+        if (transformYT < MINSPRITEDISTANCE || transformYT > _viewdistance + SPRITEVIEWEXENTSION) //_sviewdistance)
             return result;
 
         float invTransformYT = 1 / transformYT;
