@@ -654,8 +654,9 @@ public:
                               [td] "+&r" (texData),  \
                               [td2] "+&r" (texMask)  \
                             : [step] "r" (accustep) \
-                        ); \
-                        if(fullstep) { texMask >>= fullstep; texData >>= fullstep; }
+                        ); 
+
+                        //if(fullstep) { texMask >>= fullstep; texData >>= fullstep; }
 
                     _SPRITEREADSCRBYTE();
 
@@ -667,10 +668,20 @@ public:
                         uint8_t endFirst = min((drawStartByte + 1) * 8, drawData.drawEndY);
                         uint8_t bm = fastlshift8(drawData.drawStartY & 7);
 
-                        for (uint8_t i = drawData.drawStartY; i < endFirst; i++)
+                        if(fullstep)
                         {
-                            _SPRITEBITUNROLL(bm, (~bm));
-                            bm <<= 1;
+                            for (uint8_t i = drawData.drawStartY; i < endFirst; i++) {
+                                _SPRITEBITUNROLL(bm, (~bm));
+                                texMask >>= fullstep; texData >>= fullstep;
+                                bm <<= 1;
+                            }
+                        }
+                        else
+                        {
+                            for (uint8_t i = drawData.drawStartY; i < endFirst; i++) {
+                                _SPRITEBITUNROLL(bm, (~bm));
+                                bm <<= 1;
+                            }
                         }
 
                         //Move to next, like it never happened
@@ -679,18 +690,45 @@ public:
                     }
 
                     //Now the unrolled loop
-                    while(thisWallByte < drawEndByte)
+                    if(fullstep)
                     {
-                        _SPRITEBITUNROLL(0b00000001, 0b11111110);
-                        _SPRITEBITUNROLL(0b00000010, 0b11111101);
-                        _SPRITEBITUNROLL(0b00000100, 0b11111011);
-                        _SPRITEBITUNROLL(0b00001000, 0b11110111);
-                        _SPRITEBITUNROLL(0b00010000, 0b11101111);
-                        _SPRITEBITUNROLL(0b00100000, 0b11011111);
-                        _SPRITEBITUNROLL(0b01000000, 0b10111111);
-                        _SPRITEBITUNROLL(0b10000000, 0b01111111);
-                        _SPRITEWRITESCRNEXT();
-                        _SPRITEREADSCRBYTE();
+                        while (thisWallByte < drawEndByte)
+                        {
+                            _SPRITEBITUNROLL(0b00000001, 0b11111110);
+                            texMask >>= fullstep; texData >>= fullstep;
+                            _SPRITEBITUNROLL(0b00000010, 0b11111101);
+                            texMask >>= fullstep; texData >>= fullstep;
+                            _SPRITEBITUNROLL(0b00000100, 0b11111011);
+                            texMask >>= fullstep; texData >>= fullstep;
+                            _SPRITEBITUNROLL(0b00001000, 0b11110111);
+                            texMask >>= fullstep; texData >>= fullstep;
+                            _SPRITEBITUNROLL(0b00010000, 0b11101111);
+                            texMask >>= fullstep; texData >>= fullstep;
+                            _SPRITEBITUNROLL(0b00100000, 0b11011111);
+                            texMask >>= fullstep; texData >>= fullstep;
+                            _SPRITEBITUNROLL(0b01000000, 0b10111111);
+                            texMask >>= fullstep; texData >>= fullstep;
+                            _SPRITEBITUNROLL(0b10000000, 0b01111111);
+                            texMask >>= fullstep; texData >>= fullstep;
+                            _SPRITEWRITESCRNEXT();
+                            _SPRITEREADSCRBYTE();
+                        }
+                    }
+                    else
+                    {
+                        while (thisWallByte < drawEndByte)
+                        {
+                            _SPRITEBITUNROLL(0b00000001, 0b11111110);
+                            _SPRITEBITUNROLL(0b00000010, 0b11111101);
+                            _SPRITEBITUNROLL(0b00000100, 0b11111011);
+                            _SPRITEBITUNROLL(0b00001000, 0b11110111);
+                            _SPRITEBITUNROLL(0b00010000, 0b11101111);
+                            _SPRITEBITUNROLL(0b00100000, 0b11011111);
+                            _SPRITEBITUNROLL(0b01000000, 0b10111111);
+                            _SPRITEBITUNROLL(0b10000000, 0b01111111);
+                            _SPRITEWRITESCRNEXT();
+                            _SPRITEREADSCRBYTE();
+                        }
                     }
 
                     //Last byte, but only need to do it if we end in the middle of a byte and don't simply span one byte
@@ -698,10 +736,21 @@ public:
                     {
                         uint8_t endStart = thisWallByte * 8;
                         uint8_t bm = fastlshift8(endStart & 7);
-                        for (uint8_t i = endStart; i < drawData.drawEndY; i++)
+
+                        if(fullstep)
                         {
-                            _SPRITEBITUNROLL(bm, (~bm));
-                            bm <<= 1;
+                            for (uint8_t i = endStart; i < drawData.drawEndY; i++) {
+                                _SPRITEBITUNROLL(bm, (~bm));
+                                texMask >>= fullstep; texData >>= fullstep;
+                                bm <<= 1;
+                            }
+                        }
+                        else
+                        {
+                            for (uint8_t i = endStart; i < drawData.drawEndY; i++) {
+                                _SPRITEBITUNROLL(bm, (~bm));
+                                bm <<= 1;
+                            }
                         }
 
                         //Only need to set the last byte if we're drawing in it of course
@@ -728,6 +777,7 @@ public:
 
                         uint8_t bm = fastlshift8(bidx);
                         _SPRITEBITUNROLL(bm, ~bm);
+                        if(fullstep) {   texMask >>= fullstep; texData >>= fullstep; }
                     }
                     while(++y < drawData.drawEndY); //EXCLUSIVE
 
