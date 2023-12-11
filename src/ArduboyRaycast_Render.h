@@ -514,7 +514,8 @@ public:
 
         // calculate the dimensions of the sprite on screen. All sprites are square. Size mods go here
         // using 'transformY' instead of the real distance prevents fisheye
-        uint16_t spriteHeight = uint16_t(VIEWHEIGHT * invTransformYT * (float)this->spritescaling[(sprite->state & RSSTATESIZE) >> 1]);
+        float scale = (float)this->spritescaling[(sprite->state & RSSTATESIZE) >> 1];
+        uint16_t spriteHeight = uint16_t(VIEWHEIGHT * invTransformYT * scale);
         uint16_t spriteWidth = spriteHeight;
 
         // calculate lowest and highest pixel to fill. Sprite screen/start X and Sprite screen/start Y
@@ -529,7 +530,8 @@ public:
         // Calculate vertical shift from top 5 bits of state
         uint8_t yShiftBits = sprite->state;
         TOBYTECOUNT(yShiftBits); //((sprite->state >> 1) >> 1) >> 1;
-        int16_t yShift = yShiftBits ? int16_t((yShiftBits & 16 ? -(yShiftBits & 15) : (yShiftBits & 15)) * 2.0 * invTransformYT) : 0;
+        //int16_t yShift = yShiftBits ? int16_t((yShiftBits & 16 ? -(yShiftBits & 15) : (yShiftBits & 15)) * 2.0 * invTransformYT) : 0;
+        int16_t yShift = yShiftBits ? int16_t((yShiftBits & 16 ? -(yShiftBits & 15) : (yShiftBits & 15)) * max(scale, 1) * 2.0 * invTransformYT) : 0;
         // The above didn't work without float math, didn't feel like figuring out the ridiculous type casting
 
         int16_t ssY = -(spriteHeight >> 1) + MIDSCREENY + yShift;
