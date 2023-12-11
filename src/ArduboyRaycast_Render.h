@@ -10,7 +10,7 @@
 #include "ArduboyRaycast_Shading.h"
 
 // Available flags for compilation
-// #define RCSMALLLOOPS           // The raycaster makes use of loop unrolling, which adds about 1.5kb code. This removes that but performance severely drops
+// #define RCSMALLLOOPS           // The raycaster makes use of loop unrolling, which adds about 1.7kb code. This removes that but performance severely drops
 
 // Debug flags 
 // #define RCGENERALDEBUG       // Must be set for any of the othere to work
@@ -637,17 +637,19 @@ public:
                     //These five variables (including texData+texMask) are needed as part of the loop unrolling system
                     uint16_t bofs;
                     uint8_t texByte;
+                    uint8_t maskByte;
                     uint8_t thisWallByte = drawStartByte;
 
                     uint8_t accum = accumStart;
 
                     //Pull screen byte, save location
-                    #define _SPRITEREADSCRBYTE() bofs = thisWallByte * WIDTH + x; texByte = sbuffer[bofs];
+                    #define _SPRITEREADSCRBYTE() bofs = thisWallByte * WIDTH + x; texByte = sbuffer[bofs]; maskByte = 0;
                     //Write previously read screen byte, go to next byte
-                    #define _SPRITEWRITESCRNEXT() if(shading.type == RcShadingType::Black) { sbuffer[bofs] = (texByte & shade); } else { sbuffer[bofs] = (texByte | shade);} thisWallByte++;
+                    #define _SPRITEWRITESCRNEXT() if(shading.type == RcShadingType::Black) { sbuffer[bofs] = (texByte & (shade | ~maskByte)); } else { sbuffer[bofs] = (texByte | (shade & maskByte));} thisWallByte++;
                     //Work for setting bits of screen byte
                     #define _SPRITEBITUNROLL(bm,nbm) \
-                        if (texMask & 1) { if (texData & 1) texByte |= bm; else texByte &= nbm; } \
+                        if (texMask & 1) { if (texData & 1) texByte |= bm; else texByte &= nbm; maskByte |= bm; } \
+                        /*else { maskByte |= bm; } */ \
                         asm volatile( \
                             "add %[accum], %[step]    \n" \
                             "brcc .+8       \n" \
@@ -660,8 +662,6 @@ public:
                               [td2] "+&r" (texMask)  \
                             : [step] "r" (accustep) \
                         ); 
-                        //\
-                        //if(fullstep) { texMask >>= fullstep; texData >>= fullstep; }
 
                     _SPRITEREADSCRBYTE();
 
@@ -777,7 +777,9 @@ public:
 
                     //The above loop specifically CAN'T reach the last byte, so although it's wasteful in the case of a 
                     //sprite ending at the bottom of the screen, it's still better than always incurring an if statement... maybe.
-                    sbuffer[bofs] = texByte;
+                    //if(drawData.drawEndY & 7)
+                    _SPRITEWRITESCRNEXT();
+                    //sbuffer[bofs] = texByte;
 
                     #endif
 
