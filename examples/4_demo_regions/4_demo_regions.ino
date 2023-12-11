@@ -121,6 +121,7 @@ void loadArea(uint8_t area)
     currentBackground = map.Background;
     currentZoneArray = map.LoadingZones;
     raycast.render.shading = map.ShadeType;
+    raycast.render.spriteShading = map.ShadeType;
     raycast.render.altWallShading = map.AltShading;
     raycast.render.setLightIntensity((uflot)map.LightLevel);
 

@@ -68,6 +68,13 @@ struct RcShadeInfo
     RcShadingType type;
 };
 
+#define RCMASKTOP(shading, shade, yofs) \
+    if(shading.type == RcShadingType::White) shade &= pgm_read_byte(shade_mask + yofs); \
+    else shade |= ~pgm_read_byte(shade_mask + yofs);
+#define RCMASKBOTTOM(shading, shade, yofs) \
+    if(shading.type == RcShadingType::White) shade &= ~pgm_read_byte(shade_mask + yofs); \
+    else shade |= pgm_read_byte(shade_mask + yofs);
+
 // Raycast renderer container, tracks data used for raycasting + lets you render raycasting
 template<uint8_t W, uint8_t H>
 class RcRender
@@ -84,7 +91,7 @@ public:
     static constexpr uint16_t MAXLHEIGHT = 32768;
     static constexpr float MINLDISTANCE = 1.0f / MAXLHEIGHT;
     static constexpr float MINSPRITEDISTANCE = 0.2;
-    static constexpr uflot SPRITEVIEWEXENTSION = 0.5;
+    static constexpr uflot SPRITEVIEWEXENTSION = 1;
 
     uflot lightintensity = 1.0;     // Impacts view distance + shading even when no shading applied
     const uint8_t * tilesheet = NULL;
@@ -95,6 +102,7 @@ public:
     uint8_t cornershading = 1;
     RcShadingType shading = RcShadingType::Black;
     RcShadingType altWallShading = RcShadingType::Black;
+    RcShadingType spriteShading = RcShadingType::None; //Sprite shading is kinda weird
 
     // I want these to be private but they're needed elsewhere
     uflot _viewdistance = 4.0;      // Calculated value
@@ -121,9 +129,9 @@ public:
     }
 
     // Calculate the appropriate shading for this wall slice given our rendering config
-    inline RcShadeInfo calculateShading(uflot distance, uint8_t x)
+    inline RcShadeInfo calculateShading(uflot distance, uint8_t x, RcShadingType shading)
     {
-        if(this->shading == RcShadingType::None)
+        if(shading == RcShadingType::None)
         {
             return RcShadeInfo {
                 0xFF,
@@ -134,9 +142,9 @@ public:
         {
             RcShadeInfo result {
                 calcShading(distance, x, this->_darkness),
-                this->shading
+                shading
             };
-            if(this->shading == RcShadingType::White)
+            if(shading == RcShadingType::White)
                 result.shading = ~result.shading;
             return result;
         }
@@ -169,7 +177,7 @@ public:
         uflot viewdistance = this->_viewdistance;
         uflot * distCache = this->_distCache;
 
-        RcShadeInfo shade;
+        //RcShadeInfo shade;
         uint8_t texX = 0;
         uint16_t texData = 0;
 
@@ -274,7 +282,7 @@ public:
             #endif
 
             //ending should be exclusive
-            drawWallLine(x, perpWallDist, this->calculateShading(perpWallDist, x), texData, arduboy);
+            drawWallLine(x, perpWallDist, this->calculateShading(perpWallDist, x, this->shading), texData, arduboy);
         }
     }
 
@@ -362,10 +370,7 @@ public:
             }
 
             //Move to next, like it never happened (but mask shading)
-            if(shading.type == RcShadingType::White)
-                shade &= pgm_read_byte(shade_mask + yofs);
-            else
-                shade |= ~pgm_read_byte(shade_mask + yofs);
+            RCMASKTOP(shading, shade, yofs);
             _WALLWRITENEXT();
             _WALLREADBYTE();
             shade = shading.shading;
@@ -436,10 +441,7 @@ public:
 
             //"Don't repeat yourself": that ship has sailed. Anyway, only write the last byte if we need to, otherwise
             //we could legitimately write outside the bounds of the screen.
-            if(shading.type == RcShadingType::White)
-                shade &= ~pgm_read_byte(shade_mask + yofs);
-            else
-                shade |= pgm_read_byte(shade_mask + yofs);
+            RCMASKBOTTOM(shading, shade, yofs);
             if(cornershading) { _WALLWRITENEXT(& ~(fastlshift8(yofs))); }
             else { _WALLWRITENEXT(); }
         }
@@ -500,7 +502,7 @@ public:
         float transformYT = calc->invDet * (player->dirX * spriteX + player->dirY * spriteY); // this is actually the depth inside the screen, that what Z is in 3D
 
         // Nice quick shortcut to get out for sprites behind us (and ones that are too close / far)
-        if (transformYT < MINSPRITEDISTANCE || transformYT > _viewdistance + SPRITEVIEWEXENTSION) //_sviewdistance)
+        if (transformYT < MINSPRITEDISTANCE ) //|| transformYT > _viewdistance + SPRITEVIEWEXENTSION) //_sviewdistance)
             return result;
 
         float invTransformYT = 1 / transformYT;
@@ -629,6 +631,9 @@ public:
                     //A small optimization for small sprites
                     if(!texMask) goto SKIPSPRITESTRIPE;
 
+                    RcShadeInfo shading = this->calculateShading(drawData.transformY, x, this->spriteShading);
+                    uint8_t shade = shading.shading;
+
                     //These five variables (including texData+texMask) are needed as part of the loop unrolling system
                     uint16_t bofs;
                     uint8_t texByte;
@@ -639,7 +644,7 @@ public:
                     //Pull screen byte, save location
                     #define _SPRITEREADSCRBYTE() bofs = thisWallByte * WIDTH + x; texByte = sbuffer[bofs];
                     //Write previously read screen byte, go to next byte
-                    #define _SPRITEWRITESCRNEXT() sbuffer[bofs] = texByte; thisWallByte++;
+                    #define _SPRITEWRITESCRNEXT() if(shading.type == RcShadingType::Black) { sbuffer[bofs] = (texByte & shade); } else { sbuffer[bofs] = (texByte | shade);} thisWallByte++;
                     //Work for setting bits of screen byte
                     #define _SPRITEBITUNROLL(bm,nbm) \
                         if (texMask & 1) { if (texData & 1) texByte |= bm; else texByte &= nbm; } \
@@ -661,11 +666,13 @@ public:
 
                     #ifndef RCSMALLLOOPS
 
+                    uint8_t yofs = drawData.drawStartY & 7;
+
                     //First and last bytes are tricky
-                    if(drawData.drawStartY & 7)
+                    if(yofs)
                     {
                         uint8_t endFirst = min((drawStartByte + 1) * 8, drawData.drawEndY);
-                        uint8_t bm = fastlshift8(drawData.drawStartY & 7);
+                        uint8_t bm = fastlshift8(yofs);
 
                         for (uint8_t i = drawData.drawStartY; i < endFirst; i++)
                         {
@@ -674,8 +681,10 @@ public:
                         }
 
                         //Move to next, like it never happened
+                        RCMASKTOP(shading, shade, yofs);
                         _SPRITEWRITESCRNEXT();
                         _SPRITEREADSCRBYTE();
+                        shade = shading.shading;
                     }
 
                     //Now the unrolled loop
@@ -693,8 +702,10 @@ public:
                         _SPRITEREADSCRBYTE();
                     }
 
+                    yofs = drawData.drawEndY & 7;
+
                     //Last byte, but only need to do it if we end in the middle of a byte and don't simply span one byte
-                    if((drawData.drawEndY & 7) && drawStartByte != drawEndByte)
+                    if(yofs && drawStartByte != drawEndByte)
                     {
                         uint8_t endStart = thisWallByte * 8;
                         uint8_t bm = fastlshift8(endStart & 7);
@@ -705,7 +716,9 @@ public:
                         }
 
                         //Only need to set the last byte if we're drawing in it of course
-                        sbuffer[bofs] = texByte;
+                        RCMASKBOTTOM(shading, shade, yofs);
+                        _SPRITEWRITESCRNEXT();
+                        //sbuffer[bofs] = texByte;
                     }
 
                     #else // No loop unrolling
