@@ -10,7 +10,7 @@
 #include "ArduboyRaycast_Shading.h"
 
 // Available flags for compilation
-// #define RCSMALLLOOPS           // The raycaster makes use of loop unrolling, which adds about 1.7kb code. This removes that but performance severely drops
+// #define RCSMALLLOOPS           // The raycaster makes use of loop unrolling, which adds about 1.5kb code. This removes that but performance severely drops
 
 // Debug flags 
 // #define RCGENERALDEBUG       // Must be set for any of the othere to work
@@ -530,8 +530,7 @@ public:
         // Calculate vertical shift from top 5 bits of state
         uint8_t yShiftBits = sprite->state;
         TOBYTECOUNT(yShiftBits); //((sprite->state >> 1) >> 1) >> 1;
-        //int16_t yShift = yShiftBits ? int16_t((yShiftBits & 16 ? -(yShiftBits & 15) : (yShiftBits & 15)) * 2.0 * invTransformYT) : 0;
-        int16_t yShift = yShiftBits ? int16_t((yShiftBits & 16 ? -(yShiftBits & 15) : (yShiftBits & 15)) * max(scale, 1) * 2.0 * invTransformYT) : 0;
+        int16_t yShift = yShiftBits ? int16_t((yShiftBits & 16 ? -(yShiftBits & 15) : (yShiftBits & 15)) * max(scale, 1.0) * 2.0 * invTransformYT) : 0;
         // The above didn't work without float math, didn't feel like figuring out the ridiculous type casting
 
         int16_t ssY = -(spriteHeight >> 1) + MIDSCREENY + yShift;
@@ -651,7 +650,6 @@ public:
                     //Work for setting bits of screen byte
                     #define _SPRITEBITUNROLL(bm,nbm) \
                         if (texMask & 1) { if (texData & 1) texByte |= bm; else texByte &= nbm; maskByte |= bm; } \
-                        /*else { maskByte |= bm; } */ \
                         asm volatile( \
                             "add %[accum], %[step]    \n" \
                             "brcc .+8       \n" \
@@ -663,7 +661,8 @@ public:
                               [td] "+&r" (texData),  \
                               [td2] "+&r" (texMask)  \
                             : [step] "r" (accustep) \
-                        ); 
+                        ); \
+                        if(fullstep) { texMask >>= fullstep; texData >>= fullstep; }
 
                     _SPRITEREADSCRBYTE();
 
@@ -680,7 +679,6 @@ public:
                         for (uint8_t i = drawData.drawStartY; i < endFirst; i++)
                         {
                             _SPRITEBITUNROLL(bm, (~bm));
-                            if(fullstep) { texMask >>= fullstep; texData >>= fullstep; }
                             bm <<= 1;
                         }
 
@@ -692,45 +690,18 @@ public:
                     }
 
                     //Now the unrolled loop
-                    if(fullstep)
+                    while (thisWallByte < drawEndByte)
                     {
-                        while (thisWallByte < drawEndByte)
-                        {
-                            _SPRITEBITUNROLL(0b00000001, 0b11111110);
-                            texMask >>= fullstep; texData >>= fullstep;
-                            _SPRITEBITUNROLL(0b00000010, 0b11111101);
-                            texMask >>= fullstep; texData >>= fullstep;
-                            _SPRITEBITUNROLL(0b00000100, 0b11111011);
-                            texMask >>= fullstep; texData >>= fullstep;
-                            _SPRITEBITUNROLL(0b00001000, 0b11110111);
-                            texMask >>= fullstep; texData >>= fullstep;
-                            _SPRITEBITUNROLL(0b00010000, 0b11101111);
-                            texMask >>= fullstep; texData >>= fullstep;
-                            _SPRITEBITUNROLL(0b00100000, 0b11011111);
-                            texMask >>= fullstep; texData >>= fullstep;
-                            _SPRITEBITUNROLL(0b01000000, 0b10111111);
-                            texMask >>= fullstep; texData >>= fullstep;
-                            _SPRITEBITUNROLL(0b10000000, 0b01111111);
-                            texMask >>= fullstep; texData >>= fullstep;
-                            _SPRITEWRITESCRNEXT();
-                            _SPRITEREADSCRBYTE();
-                        }
-                    }
-                    else
-                    {
-                        while (thisWallByte < drawEndByte)
-                        {
-                            _SPRITEBITUNROLL(0b00000001, 0b11111110);
-                            _SPRITEBITUNROLL(0b00000010, 0b11111101);
-                            _SPRITEBITUNROLL(0b00000100, 0b11111011);
-                            _SPRITEBITUNROLL(0b00001000, 0b11110111);
-                            _SPRITEBITUNROLL(0b00010000, 0b11101111);
-                            _SPRITEBITUNROLL(0b00100000, 0b11011111);
-                            _SPRITEBITUNROLL(0b01000000, 0b10111111);
-                            _SPRITEBITUNROLL(0b10000000, 0b01111111);
-                            _SPRITEWRITESCRNEXT();
-                            _SPRITEREADSCRBYTE();
-                        }
+                        _SPRITEBITUNROLL(0b00000001, 0b11111110);
+                        _SPRITEBITUNROLL(0b00000010, 0b11111101);
+                        _SPRITEBITUNROLL(0b00000100, 0b11111011);
+                        _SPRITEBITUNROLL(0b00001000, 0b11110111);
+                        _SPRITEBITUNROLL(0b00010000, 0b11101111);
+                        _SPRITEBITUNROLL(0b00100000, 0b11011111);
+                        _SPRITEBITUNROLL(0b01000000, 0b10111111);
+                        _SPRITEBITUNROLL(0b10000000, 0b01111111);
+                        _SPRITEWRITESCRNEXT();
+                        _SPRITEREADSCRBYTE();
                     }
 
                     yofs = drawData.drawEndY & 7;
@@ -743,14 +714,12 @@ public:
                         for (uint8_t i = endStart; i < drawData.drawEndY; i++)
                         {
                             _SPRITEBITUNROLL(bm, (~bm));
-                            if(fullstep) { texMask >>= fullstep; texData >>= fullstep; }
                             bm <<= 1;
                         }
 
                         //Only need to set the last byte if we're drawing in it of course
                         RCMASKBOTTOM(shading, shade, yofs);
                         _SPRITEWRITESCRNEXT();
-                        //sbuffer[bofs] = texByte;
                     }
 
                     #else // No loop unrolling
