@@ -104,7 +104,7 @@ public:
 
     // Attempt to add a sprite to the sprite list. Activates the sprite immediately and fills out some of the more 
     // complicated fields.
-    RcSprite<InternalStateBytes> * addSprite(float x, float y, uint8_t frame, uint8_t sizeLevel, int8_t heightAdjust, void (* func)(RcSprite<InternalStateBytes> *))
+    RcSprite<InternalStateBytes> * addSprite(muflot x, muflot y, uint8_t frame, uint8_t sizeLevel, int8_t heightAdjust, void (* func)(RcSprite<InternalStateBytes> *))
     {
         uint8_t numsprites = this->numsprites;
         for(uint8_t i = 0; i < numsprites; i++)
@@ -112,8 +112,8 @@ public:
             RcSprite<InternalStateBytes> * sprite = &this->sprites[i];
             if(!ISSPRITEACTIVE((*sprite)))
             {
-                sprite->x = muflot(x);
-                sprite->y = muflot(y);
+                sprite->x = x; //muflot(x);
+                sprite->y = y; //muflot(y);
                 sprite->frame = frame;
                 sprite->setActive(true);
                 sprite->setHeight(heightAdjust);
@@ -127,7 +127,7 @@ public:
     }
 
     // Attempt to add a bounds to the bounds list.
-    RcBounds * addBounds(float x1, float y1, float x2, float y2, bool solid)
+    RcBounds * addBounds(muflot x1, muflot y1, muflot x2, muflot y2, bool solid)
     {
         uint8_t numbounds = this->numbounds;
         for(uint8_t i = 0; i < numbounds; i++)
@@ -135,10 +135,10 @@ public:
             RcBounds * bounds = &this->bounds[i];
             if(!ISSPRITEACTIVE((*bounds)))
             {
-                bounds->x1 = muflot(x1);
-                bounds->x2 = muflot(x2);
-                bounds->y1 = muflot(y1);
-                bounds->y2 = muflot(y2);
+                bounds->x1 = x1; //muflot(x1);
+                bounds->x2 = x2; //muflot(x2);
+                bounds->y1 = y1; //muflot(y1);
+                bounds->y2 = y2; //muflot(y2);
                 bounds->setActive(true);
                 bounds->setSolid(solid);
                 return bounds;
@@ -152,10 +152,10 @@ public:
     // It is equivalent to calling 'addBounds' then calling 'linkSpriteBounds' with all the error
     // handling involved. Not that linked bounds do NOT move with the sprite, that's up to you.
     // Linking is only done to more easily find a sprite from a bounds, and vice-versa.
-    RcBounds * addSpriteBounds(RcSprite<InternalStateBytes> * sprite, float size, bool solid)
+    RcBounds * addSpriteBounds(RcSprite<InternalStateBytes> * sprite, muflot size, bool solid)
     {
-        float halfsize = size / 2;
-        RcBounds * result = this->addBounds((float)sprite->x - halfsize, (float)sprite->y - halfsize, (float)sprite->x + halfsize, (float)sprite->y + halfsize, solid);
+        muflot halfsize = size / 2;
+        RcBounds * result = this->addBounds(sprite->x - halfsize, sprite->y - halfsize, sprite->x + halfsize, sprite->y + halfsize, solid);
         if(result)
         {
             RcBounds * bounds = this->linkSpriteBounds(sprite, result);

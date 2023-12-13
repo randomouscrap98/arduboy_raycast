@@ -54,6 +54,14 @@ public:
         }
     }
 
+    float getAngle()
+    {
+        float result = atan2(this->dirY, this->dirX);
+        if(result < 0)
+            result += 2 * M_PI;
+        return result;
+    }
+
     //Attempt to move the player the given delta movement and rotation, using the given solidity checker for position
     inline void tryMovement(float movement, float rotation, bool (* solidChecker)(uflot,uflot))
     {

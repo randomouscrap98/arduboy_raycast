@@ -604,9 +604,9 @@ public:
             uint8_t fr = sprite->frame;
 
             uint8_t drawStartByte = drawData.drawStartY;
-            TOBYTECOUNT(drawStartByte); //(((drawData.drawStartY >> 1) >> 1) >> 1); //right shift 3 without loop
+            TOBYTECOUNT(drawStartByte); 
             uint8_t drawEndByte = drawData.drawEndY;
-            TOBYTECOUNT(drawEndByte); //(((drawData.drawEndY >> 1) >> 1) >> 1);  //The byte to end the unrolled loop on. Could be inclusive or exclusive
+            TOBYTECOUNT(drawEndByte); 
             uint16_t texData = 0;
             uint16_t texMask = 0;
 
