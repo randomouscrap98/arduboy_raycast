@@ -6,25 +6,26 @@
 
 constexpr uint8_t BAYERGRADIENTS = 16;
 
-// Bayer gradients, not including the 0 fill (useless?).
-// Takes up 64 precious bytes of RAM
+// Bayer gradients, from full filled to zero filled. Represents 4x4; technically
+// you only need two bytes for this but for speed, they're really 8x4
 constexpr uint8_t b_shading[] PROGMEM = {
-    0xFF, 0xFF, 0xFF, 0xFF, // Bayer 16
-    0xEE, 0xFF, 0xFF, 0xFF, // 0
+    0xFF, 0xFF, 0xFF, 0xFF, 
+    0xEE, 0xFF, 0xFF, 0xFF, 
     0xEE, 0xFF, 0xBB, 0xFF,
-    0xEE, 0xFF, 0xAA, 0xFF, // 2 
+    0xEE, 0xFF, 0xAA, 0xFF, 
     0xAA, 0xFF, 0xAA, 0xFF, 
-    0xAA, 0xDD, 0xAA, 0xFF, // 4
+    0xAA, 0xDD, 0xAA, 0xFF, 
     0xAA, 0xDD, 0xAA, 0x77,
-    0xAA, 0xDD, 0xAA, 0x55, // 6
+    0xAA, 0xDD, 0xAA, 0x55, 
     0xAA, 0x55, 0xAA, 0x55,
-    0xAA, 0x44, 0xAA, 0x55, // 8
+    0xAA, 0x44, 0xAA, 0x55, 
     0xAA, 0x44, 0xAA, 0x11, 
-    0xAA, 0x44, 0xAA, 0x00, // 10
+    0xAA, 0x44, 0xAA, 0x00, 
     0xAA, 0x00, 0xAA, 0x00, 
-    0x44, 0x00, 0xAA, 0x00, // 12
+    0x44, 0x00, 0xAA, 0x00, 
     0x44, 0x00, 0x22, 0x00,
-    0x44, 0x00, 0x00, 0x00, // 14
+    0x44, 0x00, 0x00, 0x00, 
+    0x00, 0x00, 0x00, 0x00, 
 };
 
 // It's ridiculous that it's faster to read this from memory than to simply left/right shift...
@@ -43,4 +44,33 @@ inline uint8_t calcShading(uflot perpWallDist, uint8_t x, const uflot DARKNESS)
         : "+r" (dither)
     );
     return (dither >= BAYERGRADIENTS << 2) ? 0 : pgm_read_byte(b_shading + dither + (x & 3));
+}
+
+// Apply shading to the region of screen as though it were raycast walls (uses the same algorithm)
+// X2 and Y2 are exclusive
+template <uint8_t blackOrWhite>
+void shadeScreen(Arduboy2Base * arduboy, uint8_t bayer, uint8_t x, uint8_t y, uint8_t x2, uint8_t y2)
+{
+    uint8_t yEnd = (y2 >> 3) + (y2 & 7 ? 1 : 0);
+
+    for(uint8_t j = x; j < x2; j++)
+    {
+        //Calculate shading here
+        uint8_t shading = pgm_read_byte(b_shading + (bayer * 4) + (j & 3));
+
+        for(uint8_t i = y >> 3; i < yEnd; ++i)
+        {
+            //Zero cost abstraction... other than doubling code size if you need both. 0 for black, 1 for white
+            if constexpr (blackOrWhite == BLACK)
+                arduboy->sBuffer[j + (i * WIDTH)] &= shading;
+            else if constexpr(blackOrWhite == WHITE)
+                arduboy->sBuffer[j + (i * WIDTH)] |= ~shading;
+        }
+    }
+}
+
+template <uint8_t blackOrWhite>
+void shadeScreen(Arduboy2Base * arduboy, float amount, uint8_t x, uint8_t y, uint8_t x2, uint8_t y2)
+{
+    shadeScreen<blackOrWhite>(arduboy, uint8_t(min(BAYERGRADIENTS, round(BAYERGRADIENTS * abs(amount)))), x, y, x2, y2);
 }
