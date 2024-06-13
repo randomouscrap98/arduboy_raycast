@@ -22,18 +22,18 @@
 
 
 // Gameplay constants. You don't have to define these, but it's nice to have
-constexpr uint8_t FRAMERATE = 30; // Too many sprites + fullscreen for 35
+constexpr uint8_t FRAMERATE = 25; // Too many sprites + fullscreen for 35
 constexpr float MOVESPEED = 2.25f / FRAMERATE;
 constexpr float ROTSPEED = 3.0f / FRAMERATE;
 
 // Since we're using this number so many times in template types, might 
 // as well make it a constant.
 constexpr uint8_t NUMINTERNALBYTES = 1;
-
+constexpr uint8_t NUMSPRITES = 16;
 
 // Once again we pick 16 sprites just in case we need them. 16 is a decent number
 // to not take up all the memory but still have enough to work with.
-RcContainer<16, NUMINTERNALBYTES, 100, HEIGHT> raycast(tilesheet, spritesheet, spritesheetMask);
+RcContainer<NUMSPRITES, NUMINTERNALBYTES, WIDTH, HEIGHT> raycast(tilesheet, spritesheet, spritesheetMask);
 
 Arduboy2 arduboy;
 
@@ -87,6 +87,8 @@ void setup()
     arduboy.setFrameRate(FRAMERATE); 
     FX_INIT();
 
+    raycast.render.spritescaling[2] = 0.75;
+
     for(int i = 0; i < RCMAXMAPDIMENSION; i++) {
         raycast.worldMap.setCell(i, 0, 2);
         raycast.worldMap.setCell(i, RCMAXMAPDIMENSION - 1, 2);
@@ -98,11 +100,15 @@ void setup()
         for(int j = 2; j < RCMAXMAPDIMENSION - 2; j += 3)
             raycast.worldMap.setCell(i, j, 1);
 
-    for(int i = 3; i < RCMAXMAPDIMENSION - 2; i++)
+    for(int i = 0; i < NUMSPRITES; i++)
     {
-        RcSprite<NUMINTERNALBYTES> * sp = raycast.sprites.addSprite(1.5, i + 0.5, 1, 1, 7, NULL);
-        raycast.sprites.addSpriteBounds(sp, 0.5, true);
+        uint8_t tile = rand() % 2;
+        RcSprite<NUMINTERNALBYTES> * sp = raycast.sprites.addSprite(1.5 + (rand() % 9), 2.5 + (rand() % 9), 1 + tile, 2 - tile, 9 - 2 * tile, NULL);
+        raycast.sprites.addSpriteBounds(sp, 0.5 + 0.25 * tile, true);
     }
+    // for(int i = 3; i < RCMAXMAPDIMENSION - 2; i++)
+    // {
+    // }
 
     //raycast.render.setLightIntensity(3.0);
     //Assign custom sizes for scaling
