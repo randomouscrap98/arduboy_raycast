@@ -28,12 +28,14 @@ constexpr uint8_t BWIDTH = WIDTH >> 3;
 constexpr uint8_t RCEMPTY = 0;
 constexpr uint8_t RCTILESIZE = 32;
 constexpr uint8_t MIPMAPOFS[8] = {
-    0, 4, 6, 8, 9, 10, 11, 12
+    0, 4, 6, 6, 7, 7, 7, 7
+    //0, 4, 6, 8, 9, 10, 11, 12
 };
 //constexpr UFixed<16,16> MIPMAPWIDTHS[8] PROGMEM = {
 constexpr uint8_t MIPMAPWIDTHS[8] = {
+    32, 16, 8, 8, 4, 4, 4, 4
     //32, 32/2.0, 32/3.0, 32/4.0, 32/5.0, 32/6.0, 32/7.0, 32/8.0
-    32, 16, 11, 8, 7, 6, 5, 4
+    //32, 16, 11, 8, 7, 6, 5, 4
 };
 // ------------------------------------------------------------------------------
 
@@ -283,16 +285,13 @@ public:
             float invLineHeight = INVHEIGHT * (float)perpWallDist; 
             uint8_t mipmap = RCTILESIZE * invLineHeight;
             if(mipmap > 7) return;
-            //pgm_read_dword()
-            //return pgm_read_byte(tofs) + 256 * pgm_read_byte(tofs + 16);
             UFixed<16,16> step = MIPMAPWIDTHS[mipmap] * invLineHeight;
-            //UFixed<16,16> step = /*MIPMAPWIDTHS[mipmap]*/UFixed<16,16>::fromInternal(pgm_read_dword(MIPMAPWIDTHS + mipmap)) * invLineHeight;
             uint16_t lineHeight = (invLineHeight <= MINLDISTANCE) ? MAXLHEIGHT : (uint16_t)(1 / invLineHeight);
 
             if((side & x) && this->altWallShading != RcShadingType::None)
                 texData = this->altWallShading == RcShadingType::Black ? 0x0 : 0xFFFFFFFF;
             else
-                FX::readDataObject<uint32_t>(this->tilesheet + tile * 416 + texX * 13 + MIPMAPOFS[mipmap], texData);
+                FX::readDataObject<uint32_t>(this->tilesheet + tile * 256 + texX * 8 + MIPMAPOFS[mipmap], texData);
 
             #ifdef RCLINEHEIGHTDEBUG
             tinyfont.setCursor(16, x * 16);
