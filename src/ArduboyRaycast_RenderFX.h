@@ -29,13 +29,10 @@ constexpr uint8_t RCEMPTY = 0;
 constexpr uint8_t RCTILESIZE = 32;
 constexpr uint8_t MIPMAPOFS[8] = {
     0, 4, 6, 6, 7, 7, 7, 7
-    //0, 4, 6, 8, 9, 10, 11, 12
 };
 //constexpr UFixed<16,16> MIPMAPWIDTHS[8] PROGMEM = {
 constexpr uint8_t MIPMAPWIDTHS[8] = {
     32, 16, 8, 8, 4, 4, 4, 4
-    //32, 32/2.0, 32/3.0, 32/4.0, 32/5.0, 32/6.0, 32/7.0, 32/8.0
-    //32, 16, 11, 8, 7, 6, 5, 4
 };
 // ------------------------------------------------------------------------------
 
@@ -57,6 +54,8 @@ struct RcSpriteDrawData
     uint8_t drawStartY;
     uint8_t drawEndY;
     uint8_t drawEndX;
+
+    uint8_t mipmap;
 
     uflot texXInit;
     uflot texYInit;
@@ -507,6 +506,10 @@ public:
         if (ssYe < 0 || ssY > VIEWHEIGHT)
             return result;
 
+        float invHeight = 1.0 / spriteHeight;
+        result.mipmap = RCTILESIZE * invHeight;
+        if(result.mipmap > 7) return;
+
         result.drawStartY = ssY < 0 ? 0 : ssY; // Because of these checks, we can store them in 1 byte stuctures
         result.drawEndY = ssYe > VIEWHEIGHT ? VIEWHEIGHT : ssYe;
         result.drawStartX = ssX < 0 ? 0 : ssX;
@@ -516,7 +519,7 @@ public:
         // These float divisions happen just once per sprite, hopefully that's not too bad.
         // There used to be an option to set the precision of sprites but it didn't seem to make any difference
         float stepXf = (float)RCTILESIZE / spriteWidth;
-        float stepYf = (float)RCTILESIZE / spriteHeight;
+        float stepYf = MIPMAPWIDTHS[result.mipmap] * invHeight;
 
         result.texXInit = (result.drawStartX - ssX) * stepXf; // This unfortunately needs float because of precision glitches
         result.texYInit = (result.drawStartY - ssY) * stepYf;
@@ -546,13 +549,11 @@ public:
     template<uint8_t InternalStateBytes>
     void drawSprites(RcPlayer * player, RcSpriteGroup<InternalStateBytes> * group, Arduboy2Base * arduboy)
     {
-        return ;
-        /*
         uint8_t usedSprites = group->sortSprites(player->posX, player->posY);
 
         // Buffers, we pull them out like this just to make it a little easier (might remove later)
-        const uint8_t * spritesheet = this->spritesheet;
-        const uint8_t * spritesheet_Mask = this->spritesheet_mask;
+        const uint24_t spritesheet = this->spritesheet;
+        const uint24_t spritesheet_Mask = this->spritesheet_mask;
         uint8_t * sbuffer = arduboy->sBuffer;
         uflot * distCache = this->_distCache;
 
@@ -577,13 +578,11 @@ public:
             TOBYTECOUNT(drawStartByte); 
             uint8_t drawEndByte = drawData.drawEndY;
             TOBYTECOUNT(drawEndByte); 
-            uint16_t texData = 0;
-            uint16_t texMask = 0;
+            uint32_t texData = 0;
+            uint32_t texMask = 0;
 
-            //uint8_t lastAccum;
             uint8_t accumStart = drawData.texYInit.getFraction();
             uint8_t accustep = drawData.stepY.getFraction();
-            uint8_t fullstep = drawData.stepY.getInteger();
             uint8_t preshift = drawData.texYInit.getInteger();
 
             uint8_t x = drawData.drawStartX;
@@ -596,8 +595,12 @@ public:
                 {
                     uint8_t tx = texX.getInteger();
 
-                    texData = readTextureStrip16(spritesheet, fr, tx) >> preshift;
-                    texMask = readTextureStrip16(spritesheet_Mask, fr, tx) >> preshift;
+                    FX::readDataObject<uint32_t>(spritesheet + fr * 256 + tx * 8 + MIPMAPOFS[drawData.mipmap], texData);
+                    FX::readDataObject<uint32_t>(spritesheet_Mask + fr * 256 + tx * 8 + MIPMAPOFS[drawData.mipmap], texMask);
+                    texData >>= preshift;
+                    texMask >>= preshift;
+                    //texData = readTextureStrip16(spritesheet, fr, tx) >> preshift;
+                    //texMask = readTextureStrip16(spritesheet_Mask, fr, tx) >> preshift;
 
                     //A small optimization for small sprites
                     if(!texMask) goto SKIPSPRITESTRIPE;
@@ -620,19 +623,22 @@ public:
                     //Work for setting bits of screen byte
                     #define _SPRITEBITUNROLL(bm,nbm) \
                         if (texMask & 1) { if (texData & 1) texByte |= bm; else texByte &= nbm; maskByte |= bm; } \
-                        asm volatile( \
-                            "add %[accum], %[step]    \n" \
-                            "brcc .+8       \n" \
-                            "lsr %B[td]     \n" \
-                            "ror %A[td]     \n" \
-                            "lsr %B[td2]     \n" \
-                            "ror %A[td2]     \n" \
-                            : [accum] "+&r" (accum), \
-                              [td] "+&r" (texData),  \
-                              [td2] "+&r" (texMask)  \
-                            : [step] "r" (accustep) \
-                        ); \
-                        if(fullstep) { texMask >>= fullstep; texData >>= fullstep; }
+                        accum += accustep; \
+                        if (accum < accustep) { texData >>= 1; texMask >>= 1; }
+
+                        // asm volatile( \
+                        //     "add %[accum], %[step]    \n" \
+                        //     "brcc .+8       \n" \
+                        //     "lsr %B[td]     \n" \
+                        //     "ror %A[td]     \n" \
+                        //     "lsr %B[td2]     \n" \
+                        //     "ror %A[td2]     \n" \
+                        //     : [accum] "+&r" (accum), \
+                        //       [td] "+&r" (texData),  \
+                        //       [td2] "+&r" (texMask)  \
+                        //     : [step] "r" (accustep) \
+                        // ); \
+                        //if(fullstep) { texMask >>= fullstep; texData >>= fullstep; }
 
                     _SPRITEREADSCRBYTE();
 
@@ -712,7 +718,6 @@ public:
 
                         uint8_t bm = fastlshift8(bidx);
                         _SPRITEBITUNROLL(bm, ~bm);
-                        if(fullstep) { texMask >>= fullstep; texData >>= fullstep; }
                     }
                     while(++y < drawData.drawEndY); //EXCLUSIVE
 
@@ -734,6 +739,5 @@ public:
             // ------- END CRITICAL SECTION -------------
 
         }
-        */
     }
 };

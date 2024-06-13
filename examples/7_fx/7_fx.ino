@@ -17,6 +17,7 @@
 #include <ArduboyRaycastFX.h>
 
 // Resources
+#include "bg_full.h"
 #include "fxdata/fxdata.h"
 
 
@@ -32,13 +33,13 @@ constexpr uint8_t NUMINTERNALBYTES = 1;
 
 // Once again we pick 16 sprites just in case we need them. 16 is a decent number
 // to not take up all the memory but still have enough to work with.
-RcContainer<16, NUMINTERNALBYTES, WIDTH, HEIGHT> raycast(tilesheet, 0, 0);
+RcContainer<16, NUMINTERNALBYTES, 100, HEIGHT> raycast(tilesheet, spritesheet, spritesheetMask);
 
 Arduboy2 arduboy;
 
 // The map determines the backgrund to use, need to store it. We also store some
 // other pointers related to the current map for ease of use later
-const uint8_t * currentBackground;
+// const uint8_t * currentBackground;
 
 // Here, we create a function to provide during movement to say whether
 // something is solid. This is pretty similar to others, but we've designated
@@ -93,11 +94,17 @@ void setup()
         raycast.worldMap.setCell(RCMAXMAPDIMENSION - 1, i, 2);
     }
 
-    for(int i = 2; i < RCMAXMAPDIMENSION - 2; i += 3)
+    for(int i = 2; i < RCMAXMAPDIMENSION - 2; i += 2)
         for(int j = 2; j < RCMAXMAPDIMENSION - 2; j += 3)
             raycast.worldMap.setCell(i, j, 1);
 
-    raycast.render.setLightIntensity(3.0);
+    for(int i = 3; i < RCMAXMAPDIMENSION - 2; i++)
+    {
+        RcSprite<NUMINTERNALBYTES> * sp = raycast.sprites.addSprite(1.5, i + 0.5, 1, 1, 7, NULL);
+        raycast.sprites.addSpriteBounds(sp, 0.5, true);
+    }
+
+    //raycast.render.setLightIntensity(3.0);
     //Assign custom sizes for scaling
     // raycast.render.spritescaling[0] = 1.0;
     // raycast.render.spritescaling[1] = 0.8;
@@ -113,8 +120,8 @@ void loop()
     movement();
 
     // Draw the correct background for the area. 
-    //raycast.render.drawRaycastBackground(&arduboy, currentBackground);
-    raycast.render.clearRaycast(&arduboy);
+    raycast.render.drawRaycastBackground(&arduboy, bg_full);
+    //raycast.render.clearRaycast(&arduboy);
     raycast.runIteration(&arduboy);
 
     FX::display(false);
