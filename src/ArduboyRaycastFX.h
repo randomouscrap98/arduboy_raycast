@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Arduboy2.h>
-#include "ArduboyRaycast_Render.h"
+#include "ArduboyRaycast_RenderFX.h"
 
 template <uint8_t SpriteCount, uint8_t InternalStateBytes, uint8_t ScreenWidth, uint8_t ScreenHeight>
 class RcContainer
@@ -18,7 +18,7 @@ public:
 
     RcRender<ScreenWidth, ScreenHeight> render;
 
-    RcContainer(const uint8_t * tilesheet, const uint8_t * spritesheet, const uint8_t * spritesheet_mask) 
+    RcContainer(const uint24_t tilesheet, const uint24_t spritesheet, const uint24_t spritesheet_mask) 
     {
         sprites.sprites = this->spritesBuffer;
         sprites.sortedSprites = this->sortedBuffer;

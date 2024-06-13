@@ -1,0 +1,4 @@
+- Some tiles come from https://piiixl.itch.io/1-bit-patterns-and-tiles, thank you!
+- Other tiles are from me, use however you like
+- Most sprites come from https://opengameart.org/content/tileset-1bit-color, thank you!
+- Backgrounds are from me, use however you like
