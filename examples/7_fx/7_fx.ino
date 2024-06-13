@@ -10,9 +10,11 @@
 */
 #include <Arduboy2.h>
 #include <FixedPoints.h>
-#include <ArduboyRaycast.h>
+#include <ArduboyFX.h>
+#include <ArduboyRaycastFX.h>
 
 // Resources
+#include "fxdata/fxdata.h"
 
 
 // Gameplay constants. You don't have to define these, but it's nice to have
@@ -27,11 +29,10 @@ constexpr uint8_t NUMINTERNALBYTES = 1;
 
 // Once again we pick 16 sprites just in case we need them. 16 is a decent number
 // to not take up all the memory but still have enough to work with.
-// RcContainer<16, NUMINTERNALBYTES, WIDTH, HEIGHT> raycast(tilesheet, spritesheet, spritesheet_Mask);
+RcContainer<16, NUMINTERNALBYTES, WIDTH, HEIGHT> raycast(tilesheet, 0, 0);
 
 Arduboy2 arduboy;
 
-/*
 // The map determines the backgrund to use, need to store it. We also store some
 // other pointers related to the current map for ease of use later
 const uint8_t * currentBackground;
@@ -46,7 +47,8 @@ bool isSolid(uflot x, uflot y)
     // any (solid) bounding boxes
     uint8_t tile = raycast.worldMap.getCell(x.getInteger(), y.getInteger());
 
-    return (tile != 0 && tile != MyTiles::OutdoorRockOpening) || 
+    //return (tile != 0 && tile != MyTiles::OutdoorRockOpening) || 
+    return (tile != 0) || 
         raycast.sprites.firstColliding(x, y, RBSTATESOLID) != NULL;
 }
 
@@ -74,97 +76,19 @@ void movement()
     raycast.player.tryMovement(movement, rotation, &isSolid);
 }
 
-// Test for area transition. If it's detected, we move to that new area!
-void testAreaTransition()
-{
-    // Go scan for area bounding boxes. We reserve the top two bits of the bounds state flag to indicate
-    // the transition area ID. This means each room could have 3 map transition areas (0 couldn't be represented). 
-    // By passing in the bitmask, the colliding function will only return bounds which have one of those bits set, and we 
-    // won't get things like the collision boxes for decorative sprites
-    RcBounds * bounds = raycast.sprites.firstColliding(raycast.player.posX, raycast.player.posY, 0b11000000);
-
-    // Nothing found, nothing to do
-    if(bounds == NULL)
-        return;
-    
-    // Remember we added 1 to the zone to make it nonzero, so we must undo that now
-    uint8_t zone = (bounds->state >> 6) - 1;
-
-    // Need to go lookup the current zone. Luckily we stored a pointer to the current list of zones
-    // to make life easier!
-    LoadingZone nextZone;
-    memcpy_P(&nextZone, currentZoneArray + zone, sizeof(LoadingZone));
-
-    // Now we just load the new area!
-    loadArea(nextZone.LoadMap);
-}
-
-// Load the given area
-void loadArea(uint8_t area)
-{
-    // Clear out old stuff
-    raycast.sprites.resetAll();
-
-    // Go into the maps and pull out the struct representing the map
-    MapInfo map; 
-    memcpy_P(&map, AllMaps + area, sizeof(MapInfo));
-
-    // Now load the map and set the background and such. See how we can
-    // set the parameters of rendering whenever we want? You could set it
-    // in the middle of gameplay even, though it would be jarring
-    currentBackground = map.Background;
-    currentZoneArray = map.LoadingZones;
-    raycast.render.shading = map.ShadeType;
-    //raycast.render.spriteShading = map.ShadeType;
-    raycast.render.altWallShading = map.AltShading;
-    raycast.render.setLightIntensity((uflot)map.LightLevel);
-
-    // We keep the default player facing direction because why not.
-    raycast.player.posX = (uflot)map.SpawnX;
-    raycast.player.posY = (uflot)map.SpawnY;
-
-    // Now copy the map into memory! Since we're using off-sized maps, we
-    // have to copy them line by line, carefully
-    for(uint8_t y = 0; y < map.Height; y++)
-        memcpy_P(raycast.worldMap.map + (y * RCMAXMAPDIMENSION), map.MapData + (y * map.Width), map.Width);
-    
-    // For each sprite, well.. just set it up! We don't know how big the array is so we keep
-    // going forever until we find the special "ending sprite"
-    for(uint8_t i = 0; i < 255; i++)
-    {
-        SpriteInfo spinfo;
-        memcpy_P(&spinfo, map.SpriteData + i, sizeof(SpriteInfo));
-        if(spinfo.X == 0 && spinfo.Y == 0) break; // The special ending zone
-
-        RcSprite<NUMINTERNALBYTES> * sprite = raycast.sprites.addSprite(spinfo.X, spinfo.Y, spinfo.Frame, spinfo.Size, spinfo.Height, NULL);
-
-        if(spinfo.Collision > 0)
-            raycast.sprites.addSpriteBounds(sprite, spinfo.Collision, true);
-    }
-    
-    // For each loading zone, make an unlinked bounding box. Because of the nature of linked
-    // sprites + bounding boxes, it's more efficient to do this after sprites (but it's not a big deal)
-    for(uint8_t i = 0; i < 255; i++)
-    {
-        LoadingZone zone;
-        memcpy_P(&zone, map.LoadingZones + i, sizeof(LoadingZone));
-        if(zone.Size == 0) break; // The special ending zone
-        float halfSize = zone.Size / 2;
-        RcBounds * bounds = raycast.sprites.addBounds(zone.X - halfSize, zone.Y - halfSize, zone.X + halfSize, zone.Y + halfSize, false);
-        // Now set the zone. When transitioning, we'll lookup the zone information again, we just need
-        // to store the ID (+1)
-        bounds->state |= ((i + 1) << 6);
-    }
-    
-}
-*/
-
-
 void setup()
 {
-    arduboy.begin();
+    arduboy.boot();
+    arduboy.flashlight();
     arduboy.setFrameRate(FRAMERATE); 
+    FX_INIT();
 
+    for(int i = 0; i < RCMAXMAPDIMENSION; i++) {
+        raycast.worldMap.setCell(i, 0, 2);
+        raycast.worldMap.setCell(i, RCMAXMAPDIMENSION - 1, 2);
+        raycast.worldMap.setCell(0, i, 2);
+        raycast.worldMap.setCell(RCMAXMAPDIMENSION - 1, i, 2);
+    }
     //Assign custom sizes for scaling
     // raycast.render.spritescaling[0] = 1.0;
     // raycast.render.spritescaling[1] = 0.8;
@@ -177,11 +101,13 @@ void loop()
     if(!arduboy.nextFrame()) return;
 
     // Process player movement + interaction
-    //movement();
+    movement();
 
     // Draw the correct background for the area. 
     //raycast.render.drawRaycastBackground(&arduboy, currentBackground);
-    //raycast.runIteration(&arduboy);
+    raycast.render.clearRaycast(&arduboy);
+    raycast.runIteration(&arduboy);
 
-    arduboy.display();
+    FX::display(false);
+    //arduboy.display();
 }
