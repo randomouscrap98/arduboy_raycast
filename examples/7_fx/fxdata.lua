@@ -1,0 +1,1 @@
+raycast_helper("tilesheet", true, image("tiles.png", 32, 32, 0, true, 100, 10, true))

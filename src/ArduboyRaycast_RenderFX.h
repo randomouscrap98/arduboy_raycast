@@ -282,7 +282,7 @@ public:
             if((side & x) && this->altWallShading != RcShadingType::None)
                 texData = this->altWallShading == RcShadingType::Black ? 0x0 : 0xFFFFFFFF;
             else
-                FX::readDataObject<uint32_t>(this->tilesheet + tile * 416 + texX * 13 + MIPMAPOFS[step.getInteger()], &texData);
+                FX::readDataObject<uint32_t>(this->tilesheet + tile * 416 + texX * 13 + MIPMAPOFS[step.getInteger()], texData);
 
                 //FX::readBytes(texstripe + texX * 13, 13);
             // if((side & x) && this->altWallShading != RcShadingType::None)
@@ -299,7 +299,7 @@ public:
             #endif
 
             //ending should be exclusive
-            drawWallline(x, lineHeight, step, ws, texData, arduboy);
+            drawWallLine(x, lineHeight, step, ws, texData, arduboy);
             //drawWallLine(x, perpWallDist, texstripe, arduboy); //this->calculateShading(perpWallDist, x, this->shading), 
                 //texData, arduboy);
             //drawWallLine(x, perpWallDist, this->calculateShading(perpWallDist, x, this->shading), texData, arduboy);
@@ -309,7 +309,7 @@ public:
     //Draw a single raycast wall line. Will only draw specifically the wall line and will clip out all the rest
     //(so you can predraw a ceiling and floor before calling raycast)
     //void drawWallLine(uint8_t x, uflot distance, RcShadeInfo shading, uint16_t texData, Arduboy2Base * arduboy)
-    void drawWallLine(uint8_t x, uint16_t lineHeight, UFixed<16,16> step, RcShadeInfo shading, uint32_t stripe, Arduboy2Base * arduboy)
+    void drawWallLine(uint8_t x, uint16_t lineHeight, UFixed<16,16> step, RcShadeInfo shading, uint32_t texData, Arduboy2Base * arduboy)
     {
         // ------- BEGIN CRITICAL SECTION -------------
         int16_t halfLine = lineHeight >> 1;
