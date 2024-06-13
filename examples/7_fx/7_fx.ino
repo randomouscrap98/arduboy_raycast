@@ -8,6 +8,9 @@
     - Setting more aspects of the rendering technique 
       to differentiate inside vs outside
 */
+
+//#define RCSMALLLOOPS
+
 #include <Arduboy2.h>
 #include <FixedPoints.h>
 #include <ArduboyFX.h>
@@ -89,6 +92,12 @@ void setup()
         raycast.worldMap.setCell(0, i, 2);
         raycast.worldMap.setCell(RCMAXMAPDIMENSION - 1, i, 2);
     }
+
+    for(int i = 2; i < RCMAXMAPDIMENSION - 2; i += 3)
+        for(int j = 2; j < RCMAXMAPDIMENSION - 2; j += 3)
+            raycast.worldMap.setCell(i, j, 1);
+
+    raycast.render.setLightIntensity(3.0);
     //Assign custom sizes for scaling
     // raycast.render.spritescaling[0] = 1.0;
     // raycast.render.spritescaling[1] = 0.8;
