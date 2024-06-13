@@ -2,7 +2,7 @@
 
 using uint24_t = __uint24;
 
-// Generated with ardugotools on 2024-06-13T01:45:47-04:00
+// Generated with ardugotools on 2024-06-13T03:00:34-04:00
 
 // Image info for "tilesheet"
 // NOTE: offsets for raycast stripes are: 4, 2, 2, 1, 1, 1, 1, 1,  => 13

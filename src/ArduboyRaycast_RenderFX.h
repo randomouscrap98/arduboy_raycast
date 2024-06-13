@@ -282,8 +282,9 @@ public:
             if((side & x) && this->altWallShading != RcShadingType::None)
                 texData = this->altWallShading == RcShadingType::Black ? 0x0 : 0xFFFFFFFF;
             else
-                texData = 0xFFFFFFFF;
-            //     FX::readDataObject<uint32_t>(this->tilesheet + tile * 416 + texX * 13 + MIPMAPOFS[step.getInteger()], texData);
+                FX::readDataObject<uint32_t>(this->tilesheet + tile * 416 + texX * 13 + MIPMAPOFS[step.getInteger()], texData);
+                //FX::readDataObject<uint32_t>(this->tilesheet + tile * 416 + texX * 13 + MIPMAPOFS[step.getInteger()], texData);
+                // texData = 0xFFFFFFFF;
 
                 //FX::readBytes(texstripe + texX * 13, 13);
             // if((side & x) && this->altWallShading != RcShadingType::None)
