@@ -8,9 +8,10 @@ Please see the examples directory. This project is currently under development
 ## How to install
 
 This library depends on **FixedPoints.h** and **Arduboy2.h**. You must have those installed first.
+If you are using the FX features, you also need **ArduboyFX.h**.
 
-Until the library is more stable, I won't be adding it to the Arduino library manager. As such, you have
-a couple options:
+### Arduino Library Manager
+Open the library manager and search for ArduboyRaycast. Install the latest version
 
 ### Direct include 
 Download the src directory into your project, perhaps rename the folder "rclib", then do `#include "rclib/ArduboyRaycast.h"`
