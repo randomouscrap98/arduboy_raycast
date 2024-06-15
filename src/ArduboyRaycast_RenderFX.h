@@ -56,6 +56,7 @@ MipMapInfo get_mipmap_info(uint8_t mipmap) {
     lastMipmapInfo.offset = pgm_read_byte(MIPMAPOFS + mipmap);
     lastMipmapInfo.width = pgm_read_byte(MIPMAPWIDTHS + mipmap);
     lastMipmapInfo.bytes = pgm_read_byte(MIPMAPBYTES + mipmap);
+    return lastMipmapInfo;
 }
 
 
@@ -289,7 +290,8 @@ public:
             // If the above loop was exited without finding a tile, there's nothing to draw
             if(tile == RCEMPTY) continue;
 
-            // Figure out NOW what the line height and mipmap level is is
+            // Figure out NOW what the line height and mipmap level is is. Note: I've tried many types for this
+            // invLineHeight, since it's used so much, but float actually seems to work best...
             float invLineHeight = INVHEIGHT * (float)perpWallDist; 
             uint8_t mipmap = RCTILESIZE * invLineHeight;
             if(mipmap > 7) return;
@@ -614,8 +616,8 @@ public:
                     uint8_t tx = texX.getInteger();
 
                     FX::readDataObject<uint32_t>(spritesheet + fr * 172 + tx * drawData.mminfo.bytes + drawData.mminfo.offset, texData);
-                    //FX::readDataObject<uint32_t>(spritesheet_Mask + fr * 172 + tx * drawData.mminfo.bytes + drawData.mminfo.offset, texMask);
-                    texMask = 0xFFFFFFFF;
+                    FX::readDataObject<uint32_t>(spritesheet_Mask + fr * 172 + tx * drawData.mminfo.bytes + drawData.mminfo.offset, texMask);
+                    //texMask = 0xFFFFFFFF;
                     texData >>= preshift;
                     texMask >>= preshift;
 

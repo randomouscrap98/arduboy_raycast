@@ -9,7 +9,7 @@
       to differentiate inside vs outside
 */
 
-//#define RCSMALLLOOPS
+// #define RCSMALLLOOPS
 
 #include <Arduboy2.h>
 #include <FixedPoints.h>
@@ -22,7 +22,7 @@
 
 
 // Gameplay constants. You don't have to define these, but it's nice to have
-constexpr uint8_t FRAMERATE = 25; // Too many sprites + fullscreen for 35
+constexpr uint8_t FRAMERATE = 30; // Too many sprites + fullscreen for 35
 constexpr float MOVESPEED = 2.25f / FRAMERATE;
 constexpr float ROTSPEED = 3.0f / FRAMERATE;
 
