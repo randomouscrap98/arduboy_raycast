@@ -27,14 +27,36 @@ constexpr uint8_t BWIDTH = WIDTH >> 3;
 // Some assumptions (please try to follow these instead of changing them)
 constexpr uint8_t RCEMPTY = 0;
 constexpr uint8_t RCTILESIZE = 32;
-constexpr uint8_t MIPMAPOFS[8] = {
-    0, 4, 6, 6, 7, 7, 7, 7
+constexpr uint8_t MIPMAPOFS[8] PROGMEM = {
+    // Offsets into the TILE area to find the mipmap per "step" value.
+    0, 128, 160, 160, 168, 168, 168, 168
+    //0, 4, 6, 6, 7, 7, 7, 7
 };
-//constexpr UFixed<16,16> MIPMAPWIDTHS[8] PROGMEM = {
-constexpr uint8_t MIPMAPWIDTHS[8] = {
+constexpr uint8_t MIPMAPWIDTHS[8] PROGMEM = {
+    // The mipmap levels for each step value
     32, 16, 8, 8, 4, 4, 4, 4
 };
+constexpr uint8_t MIPMAPBYTES[8] PROGMEM = {
+    // The bytes per stripe for each step value
+    4, 2, 1, 1, 1, 1, 1, 1
+};
 // ------------------------------------------------------------------------------
+
+struct MipMapInfo {
+    uint8_t step;
+    uint8_t offset;
+    uint8_t width;
+    uint8_t bytes;
+};
+
+MipMapInfo lastMipmapInfo;
+MipMapInfo get_mipmap_info(uint8_t mipmap) {
+    if(mipmap == lastMipmapInfo.step) return lastMipmapInfo;
+    lastMipmapInfo.step = mipmap;
+    lastMipmapInfo.offset = pgm_read_byte(MIPMAPOFS + mipmap);
+    lastMipmapInfo.width = pgm_read_byte(MIPMAPWIDTHS + mipmap);
+    lastMipmapInfo.bytes = pgm_read_byte(MIPMAPBYTES + mipmap);
+}
 
 
 // A container for precalculated sprite information. These are calculations we
@@ -55,7 +77,7 @@ struct RcSpriteDrawData
     uint8_t drawEndY;
     uint8_t drawEndX;
 
-    uint8_t mipmap;
+    MipMapInfo mminfo;
 
     uflot texXInit;
     uflot texYInit;
@@ -183,15 +205,8 @@ public:
         uflot pmapofsY = p->posY - pmapY;
         flot fposX = (flot)p->posX, fposY = (flot)p->posY;
         flot dX = p->dirX, dY = p->dirY;
-        //const uint8_t * tilesheet = this->tilesheet;
         uflot viewdistance = this->_viewdistance;
         uflot * distCache = this->_distCache;
-
-
-        //RcShadeInfo shade;
-        uint8_t texX = 0;
-        uint32_t texData = 0;
-        //uint16_t texData = 0;
 
         for (uint8_t x = 0; x < VIEWWIDTH; x++)
         {
@@ -274,23 +289,25 @@ public:
             // If the above loop was exited without finding a tile, there's nothing to draw
             if(tile == RCEMPTY) continue;
 
-            //NOTE: wallX technically can only be positive, but I'm using flot to save a tiny amount from casting
-            flot wallX = side ? fposX + (flot)perpWallDist * rayDirX : fposY + (flot)perpWallDist * rayDirY;
-            wallX -= floorFixed(wallX); //.getFraction isn't working!
-            texX = uint8_t(wallX * RCTILESIZE);
-            if((side == 0 && rayDirX > 0) || (side == 1 && rayDirY < 0)) texX = RCTILESIZE - 1 - texX;
-
-            RcShadeInfo ws = calculateShading(perpWallDist, x, this->shading);
+            // Figure out NOW what the line height and mipmap level is is
             float invLineHeight = INVHEIGHT * (float)perpWallDist; 
             uint8_t mipmap = RCTILESIZE * invLineHeight;
             if(mipmap > 7) return;
-            UFixed<16,16> step = MIPMAPWIDTHS[mipmap] * invLineHeight;
+            MipMapInfo mminfo = get_mipmap_info(mipmap);
+
+            //NOTE: wallX technically can only be positive, but I'm using flot to save a tiny amount from casting
+            flot wallX = side ? fposX + (flot)perpWallDist * rayDirX : fposY + (flot)perpWallDist * rayDirY;
+            uint8_t texX = uint8_t((wallX - floorFixed(wallX)) * mminfo.width); //.getFraction isn't what you think!
+            if((side == 0 && rayDirX > 0) || (side == 1 && rayDirY < 0)) texX = mminfo.width - 1 - texX;
+
+            UFixed<16,16> step = mminfo.width * invLineHeight;
             uint16_t lineHeight = (invLineHeight <= MINLDISTANCE) ? MAXLHEIGHT : (uint16_t)(1 / invLineHeight);
+            uint32_t texData;
 
             if((side & x) && this->altWallShading != RcShadingType::None)
                 texData = this->altWallShading == RcShadingType::Black ? 0x0 : 0xFFFFFFFF;
             else
-                FX::readDataObject<uint32_t>(this->tilesheet + tile * 256 + texX * 8 + MIPMAPOFS[mipmap], texData);
+                FX::readDataObject<uint32_t>(this->tilesheet + tile * 172 + mminfo.offset + texX * mminfo.bytes, texData);
 
             #ifdef RCLINEHEIGHTDEBUG
             tinyfont.setCursor(16, x * 16);
@@ -301,7 +318,7 @@ public:
             #endif
 
             //ending should be exclusive
-            drawWallLine(x, lineHeight, step, ws, texData, arduboy);
+            drawWallLine(x, lineHeight, step, calculateShading(perpWallDist, x, this->shading), texData, arduboy);
         }
     }
 
@@ -507,8 +524,9 @@ public:
             return result;
 
         float invHeight = 1.0 / spriteHeight;
-        result.mipmap = RCTILESIZE * invHeight;
-        if(result.mipmap > 7) return;
+        uint8_t mipmap = RCTILESIZE * invHeight;
+        if(mipmap > 7) return;
+        result.mminfo = get_mipmap_info(mipmap);
 
         result.drawStartY = ssY < 0 ? 0 : ssY; // Because of these checks, we can store them in 1 byte stuctures
         result.drawEndY = ssYe > VIEWHEIGHT ? VIEWHEIGHT : ssYe;
@@ -518,8 +536,8 @@ public:
         // Setup stepping to avoid costly mult (and div) in critical loops
         // These float divisions happen just once per sprite, hopefully that's not too bad.
         // There used to be an option to set the precision of sprites but it didn't seem to make any difference
-        float stepXf = (float)RCTILESIZE / spriteWidth;
-        float stepYf = MIPMAPWIDTHS[result.mipmap] * invHeight;
+        float stepXf = (float)result.mminfo.width / spriteWidth;
+        float stepYf = result.mminfo.width * invHeight;
 
         result.texXInit = (result.drawStartX - ssX) * stepXf; // This unfortunately needs float because of precision glitches
         result.texYInit = (result.drawStartY - ssY) * stepYf;
@@ -595,12 +613,11 @@ public:
                 {
                     uint8_t tx = texX.getInteger();
 
-                    FX::readDataObject<uint32_t>(spritesheet + fr * 256 + tx * 8 + MIPMAPOFS[drawData.mipmap], texData);
-                    FX::readDataObject<uint32_t>(spritesheet_Mask + fr * 256 + tx * 8 + MIPMAPOFS[drawData.mipmap], texMask);
+                    FX::readDataObject<uint32_t>(spritesheet + fr * 172 + tx * drawData.mminfo.bytes + drawData.mminfo.offset, texData);
+                    //FX::readDataObject<uint32_t>(spritesheet_Mask + fr * 172 + tx * drawData.mminfo.bytes + drawData.mminfo.offset, texMask);
+                    texMask = 0xFFFFFFFF;
                     texData >>= preshift;
                     texMask >>= preshift;
-                    //texData = readTextureStrip16(spritesheet, fr, tx) >> preshift;
-                    //texMask = readTextureStrip16(spritesheet_Mask, fr, tx) >> preshift;
 
                     //A small optimization for small sprites
                     if(!texMask) goto SKIPSPRITESTRIPE;
