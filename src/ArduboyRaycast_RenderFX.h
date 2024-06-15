@@ -22,40 +22,39 @@
 #include <Tinyfont.h>
 #endif
 
-// -------------- CALCULATED / ASSUMED CONSTANTS, TRY NOT TO TOUCH ------------------------
-constexpr uint8_t BWIDTH = WIDTH >> 3;
-// Some assumptions (please try to follow these instead of changing them)
-constexpr uint8_t RCEMPTY = 0;
-constexpr uint8_t RCTILESIZE = 32;
-constexpr uint8_t MIPMAPOFS[8] PROGMEM = {
-    // Offsets into the TILE area to find the mipmap per "step" value.
-    0, 128, 160, 160, 168, 168, 168, 168
-    //0, 4, 6, 6, 7, 7, 7, 7
-};
-constexpr uint8_t MIPMAPWIDTHS[8] PROGMEM = {
-    // The mipmap levels for each step value
-    32, 16, 8, 8, 4, 4, 4, 4
-};
-constexpr uint8_t MIPMAPBYTES[8] PROGMEM = {
-    // The bytes per stripe for each step value
-    4, 2, 1, 1, 1, 1, 1, 1
-};
-// ------------------------------------------------------------------------------
-
 struct MipMapInfo {
-    uint8_t step;
     uint8_t offset;
     uint8_t width;
     uint8_t bytes;
 };
 
+// -------------- CALCULATED / ASSUMED CONSTANTS, TRY NOT TO TOUCH ------------------------
+constexpr uint8_t BWIDTH = WIDTH >> 3;
+// Some assumptions (please try to follow these instead of changing them)
+constexpr uint8_t RCEMPTY = 0;
+constexpr uint8_t RCTILESIZE = 32;
+constexpr MipMapInfo MIPMAPS[8] PROGMEM = {
+    // Fields are:
+    // - Offsets into the TILE area to find the mipmap per "step" value.
+    // - The mipmap levels for each step value
+    // - The bytes per stripe for each step value
+    { 0, 32, 4 },
+    { 128, 16, 2 },
+    { 160, 8 , 1 },
+    { 160, 8 , 1 },
+    { 168, 4 , 1 },
+    { 168, 4 , 1 },
+    { 168, 4 , 1 },
+    { 168, 4 , 1 },
+};
+// ------------------------------------------------------------------------------
+
+uint8_t lastMipMap;
 MipMapInfo lastMipmapInfo;
 MipMapInfo get_mipmap_info(uint8_t mipmap) {
-    if(mipmap == lastMipmapInfo.step) return lastMipmapInfo;
-    lastMipmapInfo.step = mipmap;
-    lastMipmapInfo.offset = pgm_read_byte(MIPMAPOFS + mipmap);
-    lastMipmapInfo.width = pgm_read_byte(MIPMAPWIDTHS + mipmap);
-    lastMipmapInfo.bytes = pgm_read_byte(MIPMAPBYTES + mipmap);
+    if(mipmap == lastMipMap) return lastMipmapInfo;
+    lastMipMap = mipmap;
+    memcpy_P(&lastMipmapInfo, MIPMAPS + mipmap, sizeof(MipMapInfo));
     return lastMipmapInfo;
 }
 
@@ -359,19 +358,6 @@ public:
             else texByte &= (nbm); \
             accum += accustep; \
             if (accum < accustep) { texData >>= 1; }
-
-            //asm volatile( \
-            //    "add %[accum], %[step]    \n" \
-            //    "brcc .+4       \n" \
-            //    "lsr %B[td]     \n" \
-            //    "ror %A[td]     \n" \
-            //    : [accum] "+&r" (accum), \
-            //      [td] "+&r" (texData)   \
-            //    : [step] "r" (accustep) \
-            //); 
-        
-        // The above volatile section is a special fractional accumulator which uses the carry bit to determine
-        // if an additional right shift of the texture is in order
 
         _WALLREADBYTE();
 

@@ -22,7 +22,7 @@
 
 
 // Gameplay constants. You don't have to define these, but it's nice to have
-constexpr uint8_t FRAMERATE = 30; // Too many sprites + fullscreen for 35
+constexpr uint8_t FRAMERATE = 25; // Too many sprites + fullscreen for 35
 constexpr float MOVESPEED = 2.25f / FRAMERATE;
 constexpr float ROTSPEED = 3.0f / FRAMERATE;
 
@@ -87,7 +87,9 @@ void setup()
     arduboy.setFrameRate(FRAMERATE); 
     FX_INIT();
 
+    raycast.render.setLightIntensity(2.0);
     raycast.render.spritescaling[2] = 0.75;
+    raycast.render.spriteShading = RcShadingType::Black;
 
     for(int i = 0; i < RCMAXMAPDIMENSION; i++) {
         raycast.worldMap.setCell(i, 0, 2);
